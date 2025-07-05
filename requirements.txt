@@ -1,0 +1,27 @@
+# Core Web Framework
+fastapi
+uvicorn
+python-multipart
+
+# PDF Processing - Multiple Options
+pypdf2                  # For standard PDF text extraction
+PyMuPDF                 # For complex PDFs and image extraction
+pillow                  # For image processing
+
+# OCR Capabilities (for scanned PDFs)
+easyocr                 # For OCR on scanned documents/images
+
+# API Calls for DeepSeek
+httpx
+python-dotenv
+
+# Data Processing
+pydantic               # Data validation
+python-jose[cryptography]  # For JWT if you add auth later
+
+# File handling
+aiofiles               # Async file operations
+
+# Optional
+numpy                  # EasyOCR dependency, useful for processing
+opencv-python-headless # Better than opencv-python for servers
