@@ -6,23 +6,33 @@ import os
 from datetime import datetime
 import shutil
 from pathlib import Path
+import time
 
-# Initialize FastAPI app
+
+from app.models import QuestionRequest, AnswerResponse
+from app.pdf_extractor import PDFExtractor
+from app.deepseek_client import DeepSeekClient
+from app.config import config
+
+
 app = FastAPI(
     title="AI-Driven Document Insight Service",
     description="Upload documents and ask questions about them",
     version="1.0.0"
 )
 
-# Storage configuration
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# In-memory session storage (in production, use Redis or database)
+
 sessions = {}
 
-# Allowed file extensions
-ALLOWED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
+
+pdf_extractor = PDFExtractor()
+deepseek_client = DeepSeekClient()
+
+ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
 
 @app.get("/")
 async def root():
@@ -42,21 +52,19 @@ async def upload_documents(files: List[UploadFile] = File(...)):
     Upload one or more documents for processing.
     Returns a session ID for subsequent queries.
     """
-    # Validate files
+
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     
-    # Create new session
+
     session_id = str(uuid.uuid4())
     session_dir = UPLOAD_DIR / session_id
     session_dir.mkdir(exist_ok=True)
-    
     uploaded_files = []
     errors = []
     
     for file in files:
         try:
-            # Validate file extension
             file_ext = Path(file.filename).suffix.lower()
             if file_ext not in ALLOWED_EXTENSIONS:
                 errors.append({
@@ -65,15 +73,12 @@ async def upload_documents(files: List[UploadFile] = File(...)):
                 })
                 continue
             
-            # Generate safe filename
             safe_filename = f"{uuid.uuid4().hex}_{file.filename}"
             file_path = session_dir / safe_filename
             
-            # Save file
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
-            
-            # Store file info
+
             file_info = {
                 "original_name": file.filename,
                 "saved_name": safe_filename,
@@ -92,8 +97,7 @@ async def upload_documents(files: List[UploadFile] = File(...)):
             })
         finally:
             file.file.close()
-    
-    # Store session info
+
     sessions[session_id] = {
         "id": session_id,
         "created_at": datetime.now().isoformat(),
@@ -101,7 +105,7 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         "upload_dir": str(session_dir)
     }
     
-    # Prepare response
+
     response = {
         "session_id": session_id,
         "uploaded_files": len(uploaded_files),
@@ -136,6 +140,67 @@ async def get_session_info(session_id: str):
             for f in session["files"]
         ]
     }
+
+@app.post("/ask", response_model=AnswerResponse)
+async def ask_question(request: QuestionRequest):
+    """
+    Ask a question about the uploaded documents in a session
+    """
+    start_time = time.time()
+
+    if request.session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[request.session_id]
+    
+    if not session["files"]:
+        raise HTTPException(status_code=400, detail="No files in session")
+    
+
+    if "extracted_texts" not in session:
+        print(f"Extracting text from {len(session['files'])} files...")
+        extracted_texts = {}
+        
+        for file_info in session["files"]:
+            result = pdf_extractor.extract_text(file_info["path"])
+            
+            if result["success"]:
+                extracted_texts[file_info["original_name"]] = result["text"]
+                file_info["extraction_method"] = result["method"]
+                file_info["text_length"] = len(result["text"])
+            else:
+                print(f"Failed to extract from {file_info['original_name']}: {result['error']}")
+        
+        session["extracted_texts"] = extracted_texts
+    
+
+    if not session["extracted_texts"]:
+        raise HTTPException(
+            status_code=400, 
+            detail="Could not extract text from any uploaded files"
+        )
+    
+
+    result = await deepseek_client.ask_with_multiple_contexts(
+        session["extracted_texts"],
+        request.question
+    )
+    
+    if not result["success"]:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get answer: {result['error']}"
+        )
+    
+    processing_time = time.time() - start_time
+    
+    return AnswerResponse(
+        session_id=request.session_id,
+        question=request.question,
+        answer=result["answer"],
+        sources=list(session["extracted_texts"].keys()),
+        processing_time=processing_time
+    )
 
 if __name__ == "__main__":
     import uvicorn

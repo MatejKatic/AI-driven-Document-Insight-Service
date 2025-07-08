@@ -5,7 +5,6 @@ from pathlib import Path
 async def test_upload():
     """Test the upload endpoint with sample files"""
     
-    # Make sure you have some test PDFs in test_docs folder
     test_files = list(Path("test_docs").glob("*.pdf"))
     
     if not test_files:
@@ -13,7 +12,6 @@ async def test_upload():
         return
     
     async with httpx.AsyncClient() as client:
-        # Prepare files for upload
         files = []
         for file_path in test_files[:2]:  # Upload first 2 files
             files.append(
@@ -21,7 +19,6 @@ async def test_upload():
             )
         
         try:
-            # Upload files
             response = await client.post(
                 "http://localhost:8000/upload",
                 files=files
@@ -30,7 +27,6 @@ async def test_upload():
             print(f"Status: {response.status_code}")
             print(f"Response: {response.json()}")
             
-            # Test session endpoint
             if response.status_code == 200:
                 session_id = response.json()["session_id"]
                 session_response = await client.get(
@@ -39,7 +35,6 @@ async def test_upload():
                 print(f"\nSession Info: {session_response.json()}")
                 
         finally:
-            # Close files
             for _, file_tuple in files:
                 file_tuple[1].close()
 
