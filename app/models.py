@@ -10,6 +10,8 @@ class FileInfo(BaseModel):
     size: int
     upload_time: str
     file_type: str
+    from_cache: Optional[bool] = False
+    extraction_method: Optional[str] = None
 
 class UploadResponse(BaseModel):
     """Response model for file upload"""
@@ -23,6 +25,7 @@ class SessionInfo(BaseModel):
     session_id: str
     created_at: str
     files: List[Dict[str, Any]]
+    cache_performance: Optional[Dict[str, int]] = None
 
 class QuestionRequest(BaseModel):
     """Request model for asking questions"""
@@ -36,3 +39,12 @@ class AnswerResponse(BaseModel):
     answer: str
     sources: Optional[List[str]] = None
     processing_time: Optional[float] = None
+
+class CacheStats(BaseModel):
+    """Cache statistics model"""
+    cache_type: str
+    hits: int
+    misses: int
+    saves: int
+    hit_rate: str
+    total_requests: int

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import io
 import numpy as np
+from app.cache_manager import cache_manager
 
 class PDFExtractor:
     """Handles text extraction from various types of PDFs and images"""
@@ -31,21 +32,38 @@ class PDFExtractor:
             - page_count: number of pages (for PDFs)
             - success: boolean indicating success
             - error: error message if any
+            - from_cache: boolean indicating if result was from cache
         """
         file_path = Path(file_path)
         file_ext = file_path.suffix.lower()
         
+        cached_result = cache_manager.get(str(file_path))
+        if cached_result:
+            cached_result["from_cache"] = True
+            return cached_result
+        
+        result = {"from_cache": False}
+        
         if file_ext == '.pdf':
-            return self._extract_from_pdf(file_path)
+            result.update(self._extract_from_pdf(file_path))
         elif file_ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
-            return self._extract_from_image(file_path)
+            result.update(self._extract_from_image(file_path))
         else:
-            return {
+            result.update({
                 "text": "",
                 "method": "none",
                 "success": False,
                 "error": f"Unsupported file type: {file_ext}"
-            }
+            })
+        
+        if result.get("success") and result.get("text"):
+            cache_manager.set(
+                str(file_path), 
+                result,
+                ttl_hours=24
+            )
+        
+        return result
     
     def _extract_from_pdf(self, file_path: Path) -> Dict[str, any]:
         """Extract text from PDF using multiple methods"""
@@ -57,7 +75,6 @@ class PDFExtractor:
             "error": None
         }
         
-
         try:
             text, page_count = self._extract_with_pymupdf(file_path)
             if text and len(text.strip()) > 50:  # Reasonable amount of text
@@ -71,7 +88,6 @@ class PDFExtractor:
         except Exception as e:
             print(f"PyMuPDF text extraction failed: {e}")
         
-
         try:
             print(f"Attempting OCR on {file_path.name}...")
             text = self._extract_with_ocr_from_pdf(file_path)

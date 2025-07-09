@@ -25,3 +25,6 @@ aiofiles               # Async file operations
 # Optional
 numpy                  # EasyOCR dependency, useful for processing
 opencv-python-headless # Better than opencv-python for servers
+
+# Caching (Optional)
+redis                  # For Redis caching support

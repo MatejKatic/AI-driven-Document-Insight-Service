@@ -8,12 +8,11 @@ import shutil
 from pathlib import Path
 import time
 
-
 from app.models import QuestionRequest, AnswerResponse
 from app.pdf_extractor import PDFExtractor
 from app.deepseek_client import DeepSeekClient
 from app.config import config
-
+from app.cache_manager import cache_manager
 
 app = FastAPI(
     title="AI-Driven Document Insight Service",
@@ -21,13 +20,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-
 sessions = {}
-
 
 pdf_extractor = PDFExtractor()
 deepseek_client = DeepSeekClient()
@@ -52,14 +48,13 @@ async def upload_documents(files: List[UploadFile] = File(...)):
     Upload one or more documents for processing.
     Returns a session ID for subsequent queries.
     """
-
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     
-
     session_id = str(uuid.uuid4())
     session_dir = UPLOAD_DIR / session_id
     session_dir.mkdir(exist_ok=True)
+    
     uploaded_files = []
     errors = []
     
@@ -78,7 +73,7 @@ async def upload_documents(files: List[UploadFile] = File(...)):
             
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
-
+            
             file_info = {
                 "original_name": file.filename,
                 "saved_name": safe_filename,
@@ -97,7 +92,7 @@ async def upload_documents(files: List[UploadFile] = File(...)):
             })
         finally:
             file.file.close()
-
+    
     sessions[session_id] = {
         "id": session_id,
         "created_at": datetime.now().isoformat(),
@@ -105,7 +100,6 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         "upload_dir": str(session_dir)
     }
     
-
     response = {
         "session_id": session_id,
         "uploaded_files": len(uploaded_files),
@@ -127,7 +121,7 @@ async def get_session_info(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     
     session = sessions[session_id]
-    return {
+    response = {
         "session_id": session_id,
         "created_at": session["created_at"],
         "files": [
@@ -135,11 +129,18 @@ async def get_session_info(session_id: str):
                 "filename": f["original_name"],
                 "file_type": f["file_type"],
                 "size": f["size"],
-                "upload_time": f["upload_time"]
+                "upload_time": f["upload_time"],
+                "from_cache": f.get("from_cache", False),
+                "extraction_method": f.get("extraction_method", "pending")
             }
             for f in session["files"]
         ]
     }
+    
+    if "cache_stats" in session:
+        response["cache_performance"] = session["cache_stats"]
+    
+    return response
 
 @app.post("/ask", response_model=AnswerResponse)
 async def ask_question(request: QuestionRequest):
@@ -147,7 +148,7 @@ async def ask_question(request: QuestionRequest):
     Ask a question about the uploaded documents in a session
     """
     start_time = time.time()
-
+    
     if request.session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -156,10 +157,10 @@ async def ask_question(request: QuestionRequest):
     if not session["files"]:
         raise HTTPException(status_code=400, detail="No files in session")
     
-
     if "extracted_texts" not in session:
         print(f"Extracting text from {len(session['files'])} files...")
         extracted_texts = {}
+        cache_hits = 0
         
         for file_info in session["files"]:
             result = pdf_extractor.extract_text(file_info["path"])
@@ -168,19 +169,29 @@ async def ask_question(request: QuestionRequest):
                 extracted_texts[file_info["original_name"]] = result["text"]
                 file_info["extraction_method"] = result["method"]
                 file_info["text_length"] = len(result["text"])
+                file_info["from_cache"] = result.get("from_cache", False)
+                
+                if result.get("from_cache"):
+                    cache_hits += 1
             else:
                 print(f"Failed to extract from {file_info['original_name']}: {result['error']}")
         
         session["extracted_texts"] = extracted_texts
+        session["cache_stats"] = {
+            "total_files": len(session["files"]),
+            "cache_hits": cache_hits,
+            "cache_misses": len(session["files"]) - cache_hits
+        }
+        
+        if cache_hits > 0:
+            print(f"✨ Cache Performance: {cache_hits}/{len(session['files'])} files from cache")
     
-
     if not session["extracted_texts"]:
         raise HTTPException(
             status_code=400, 
             detail="Could not extract text from any uploaded files"
         )
     
-
     result = await deepseek_client.ask_with_multiple_contexts(
         session["extracted_texts"],
         request.question
@@ -201,6 +212,27 @@ async def ask_question(request: QuestionRequest):
         sources=list(session["extracted_texts"].keys()),
         processing_time=processing_time
     )
+
+@app.get("/cache/stats")
+async def get_cache_stats():
+    """Get cache statistics"""
+    return {
+        "cache_stats": cache_manager.get_stats(),
+        "cache_directory": str(cache_manager.cache_dir) if cache_manager.cache_type == "file" else None,
+        "message": "Cache is improving performance by storing extracted text"
+    }
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear all cache entries (admin endpoint)"""
+    cache_manager.clear_all()
+    return {"message": "Cache cleared successfully"}
+
+@app.post("/cache/clear-expired")
+async def clear_expired_cache():
+    """Clear expired cache entries"""
+    cache_manager.clear_expired()
+    return {"message": "Expired cache entries cleared"}
 
 if __name__ == "__main__":
     import uvicorn

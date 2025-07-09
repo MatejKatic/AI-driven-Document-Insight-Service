@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 class Config:
@@ -23,6 +22,13 @@ class Config:
     # Storage
     UPLOAD_DIR = Path("uploads")
     UPLOAD_DIR.mkdir(exist_ok=True)
+    
+    # Cache settings
+    CACHE_TYPE = os.getenv("CACHE_TYPE", "file")  # "file" or "redis"
+    CACHE_TTL_HOURS = int(os.getenv("CACHE_TTL_HOURS", "24"))
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_DB = int(os.getenv("REDIS_DB", "0"))
     
     # Model settings
     DEFAULT_MODEL = "deepseek-chat"
