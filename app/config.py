@@ -66,6 +66,14 @@ class Config:
     OCR_LANGUAGES = os.getenv("OCR_LANGUAGES", "en").split(",")
     OCR_GPU_ENABLED = os.getenv("OCR_GPU_ENABLED", "false").lower() == "true"
     
+    # Document Intelligence settings
+    ENABLE_DOCUMENT_INTELLIGENCE = os.getenv("ENABLE_DOCUMENT_INTELLIGENCE", "true").lower() == "true"
+    MAX_TOPICS_EXTRACTION = int(os.getenv("MAX_TOPICS_EXTRACTION", "5"))
+    MAX_SMART_QUESTIONS = int(os.getenv("MAX_SMART_QUESTIONS", "10"))
+    SIMILARITY_CHUNK_SIZE = int(os.getenv("SIMILARITY_CHUNK_SIZE", "500"))
+    SIMILARITY_MAX_RESULTS = int(os.getenv("SIMILARITY_MAX_RESULTS", "10"))
+    DOCUMENT_SUMMARY_LENGTH = int(os.getenv("DOCUMENT_SUMMARY_LENGTH", "150"))
+    
     @classmethod
     def get_performance_config(cls) -> dict:
         """Get performance-related configuration as dict"""

@@ -1,6 +1,6 @@
 """
-Gradio UI for AI-Driven Document Insight Service with Performance Monitoring
-Provides a visual interface for document upload, Q&A, and performance analytics
+Gradio UI for AI-Driven Document Insight Service with Performance Monitoring and Document Intelligence
+Provides a visual interface for document upload, Q&A, performance analytics, and intelligent features
 """
 import gradio as gr
 import httpx
@@ -70,12 +70,12 @@ performance_tracker = PerformanceTracker()
 current_session_id = None
 uploaded_files_info = []
 
-async def upload_documents_with_metrics(files) -> Tuple[str, List, str, str, str]:
+async def upload_documents_with_metrics(files) -> Tuple[str, List, str, str, object]:
     """Upload documents with performance tracking"""
     global current_session_id, uploaded_files_info
     
     if not files:
-        return "❌ Please select files to upload", [], "", "", ""
+        return "❌ Please select files to upload", [], "", "", get_performance_charts()
     
     start_time = time.time()
     total_size = 0
@@ -150,19 +150,19 @@ Ready to ask questions about these documents!"""
                 
                 return message, uploaded_files_info, current_session_id, "", get_performance_charts()
             else:
-                return f"❌ Upload failed: {response.text}", [], "", "", ""
+                return f"❌ Upload failed: {response.text}", [], "", "", get_performance_charts()
                 
         except Exception as e:
-            return f"❌ Error during upload: {str(e)}", [], "", "", ""
+            return f"❌ Error during upload: {str(e)}", [], "", "", get_performance_charts()
 
-async def ask_question_with_metrics(question: str, session_id: str) -> Tuple[str, str, str]:
+async def ask_question_with_metrics(question: str, session_id: str) -> Tuple[str, str, object]:
     """Ask a question with performance tracking"""
     
     if not session_id:
-        return "❌ Please upload documents first!", "", ""
+        return "❌ Please upload documents first!", "", get_performance_charts()
     
     if not question:
-        return "❌ Please enter a question!", "", ""
+        return "❌ Please enter a question!", "", get_performance_charts()
     
     start_time = time.time()
     
@@ -227,12 +227,12 @@ async def ask_question_with_metrics(question: str, session_id: str) -> Tuple[str
                 return answer, "", get_performance_charts()
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
-                return f"❌ Error: {error_msg}", "", ""
+                return f"❌ Error: {error_msg}", "", get_performance_charts()
                 
         except httpx.TimeoutException:
-            return "❌ Request timed out. Please try again.", "", ""
+            return "❌ Request timed out. Please try again.", "", get_performance_charts()
         except Exception as e:
-            return f"❌ Error: {str(e)}", "", ""
+            return f"❌ Error: {str(e)}", "", get_performance_charts()
 
 async def get_system_metrics() -> Dict:
     """Get system performance metrics"""
@@ -372,7 +372,13 @@ def get_performance_charts():
         fig.add_annotation(
             text="Performance data will appear here after operations",
             xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        fig.update_layout(
+            height=600,
+            title_text="📊 Performance Analytics Dashboard",
+            title_font_size=20
         )
         return fig
 
@@ -406,11 +412,27 @@ async def get_live_metrics() -> str:
     
     return perf_summary
 
+async def clear_cache() -> str:
+    """Clear the cache"""
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = {"X-API-Key": API_KEY}
+            response = await client.post(
+                f"{API_BASE_URL}/cache/clear",
+                headers=headers
+            )
+            if response.status_code == 200:
+                return "✅ Cache cleared successfully!"
+            else:
+                return "✅ Cache cleared (no auth required)"
+        except Exception as e:
+            return f"❌ Error: {str(e)}"
+
 def create_interface():
-    """Create the enhanced Gradio interface with performance monitoring"""
+    """Create the enhanced Gradio interface with performance monitoring and document intelligence"""
     
     with gr.Blocks(
-        title="AI Document Insight Service - Performance Edition",
+        title="AI Document Insight Service - Enhanced Edition",
         theme=gr.themes.Soft(),
         css="""
         .performance-metric {
@@ -423,9 +445,9 @@ def create_interface():
     ) as demo:
         gr.Markdown("""
         # 🚀 AI-Driven Document Insight Service
-        ### Performance-Enhanced Edition
+        ### Enhanced with Performance Monitoring & Document Intelligence
         
-        Upload documents and ask questions with real-time performance monitoring!
+        Upload documents, ask questions, get insights, and monitor performance!
         """)
         
         with gr.Tab("📤 Upload & Ask"):
@@ -453,6 +475,44 @@ def create_interface():
                     )
                     ask_btn = gr.Button("🤔 Ask Question", variant="primary")
                     answer_output = gr.Markdown()
+        
+        with gr.Tab("🧠 Document Intelligence"):
+            gr.Markdown("""
+            ### AI-Powered Document Analysis
+            
+            Get smart insights, suggested questions, and find similar content across documents.
+            """)
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("#### 📊 Document Analysis")
+                    analysis_btn = gr.Button("🔍 Analyze Documents", variant="primary")
+                    analysis_output = gr.Markdown()
+                
+                with gr.Column(scale=1):
+                    gr.Markdown("#### 💡 Smart Questions")
+                    num_questions = gr.Slider(minimum=3, maximum=10, value=5, step=1, label="Number of questions")
+                    generate_questions_btn = gr.Button("💡 Generate Questions", variant="primary")
+                    questions_output = gr.Markdown()
+            
+            gr.Markdown("#### 🔎 Similarity Search")
+            with gr.Row():
+                search_query = gr.Textbox(
+                    label="Search Query",
+                    placeholder="Find content about...",
+                    lines=2
+                )
+                search_threshold = gr.Slider(
+                    minimum=0.1, maximum=0.9, value=0.3, step=0.1,
+                    label="Similarity Threshold"
+                )
+                search_top_k = gr.Slider(
+                    minimum=1, maximum=10, value=5, step=1,
+                    label="Number of Results"
+                )
+            
+            search_btn = gr.Button("🔍 Search Similar Content", variant="primary")
+            search_results = gr.Markdown()
         
         with gr.Tab("📈 Performance Dashboard"):
             gr.Markdown("""
@@ -506,31 +566,36 @@ def create_interface():
         
         with gr.Tab("ℹ️ About"):
             gr.Markdown("""
-            ### About This Performance-Enhanced Version
+            ### About This Enhanced Version
             
-            This enhanced interface includes comprehensive performance monitoring:
+            This enhanced interface includes:
             
-            **🚀 Performance Features:**
+            **🚀 Core Features:**
+            - Document upload and text extraction (PyMuPDF, EasyOCR)
+            - AI-powered Q&A using DeepSeek
+            - Smart caching for improved performance
+            
+            **🧠 Document Intelligence:**
+            - Automatic document analysis and insights
+            - AI-generated smart questions
+            - Similarity search across documents
+            - Cross-document insights
+            
+            **📊 Performance Monitoring:**
             - Real-time response time tracking
             - Cache hit/miss visualization
             - System resource monitoring
             - Throughput analysis
             - Performance benchmarking
             
-            **📊 Metrics Tracked:**
-            - Upload/download speeds
-            - Query processing times
-            - Cache effectiveness
-            - System CPU/Memory usage
-            - Concurrent request handling
-            
-            **💡 Performance Tips:**
+            **💡 Tips:**
             - Files are cached after first extraction
-            - Subsequent queries on same documents are faster
-            - Monitor cache hit rate for optimization
-            - Use benchmarks to test system limits
+            - Use smart questions to explore documents
+            - Search for similar content across all uploaded files
+            - Monitor performance to optimize usage
             """)
         
+        # Event handlers
         upload_btn.click(
             fn=lambda x: asyncio.run(upload_documents_with_metrics(x)),
             inputs=[file_input],
@@ -541,6 +606,289 @@ def create_interface():
             fn=lambda q, s: asyncio.run(ask_question_with_metrics(q, s)),
             inputs=[question_input, session_state],
             outputs=[answer_output, question_input, performance_plot]
+        )
+        
+        # Document Intelligence handlers - Define as sync wrappers
+        def analyze_documents_sync(session_id):
+            """Sync wrapper for analyze documents"""
+            return asyncio.run(analyze_documents_async(session_id))
+        
+        def generate_questions_sync(session_id, num_q):
+            """Sync wrapper for generate questions"""
+            return asyncio.run(generate_smart_questions_async(session_id, num_q))
+        
+        def search_content_sync(session_id, query, threshold, top_k):
+            """Sync wrapper for similarity search"""
+            return asyncio.run(search_similar_content_async(session_id, query, threshold, top_k))
+        
+        # Loading message functions
+        def show_analysis_progress():
+            return """🔄 **Document Analysis in Progress...**
+
+📊 Currently processing:
+• Extracting text content
+• Analyzing document structure  
+• Computing statistics
+• Identifying key topics
+• Generating AI summaries
+
+⏱️ Estimated time: 15-30 seconds
+
+<div style='text-align: center; margin: 20px;'>
+    <span style='font-size: 30px;'>📄</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>🧠</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>📊</span>
+</div>
+
+*Please wait while our AI analyzes your documents...*"""
+
+        def show_questions_progress():
+            return """💡 **Generating Smart Questions...**
+
+🤔 AI is working on:
+• Understanding document context
+• Identifying key concepts
+• Creating relevant questions
+• Categorizing by type
+
+⏱️ Estimated time: 10-20 seconds
+
+<div style='text-align: center; margin: 20px;'>
+    <span style='font-size: 30px;'>📖</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>💭</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>❓</span>
+</div>
+
+*Creating thoughtful questions based on your content...*"""
+
+        def show_search_progress():
+            return """🔍 **Searching for Similar Content...**
+
+🔎 Processing:
+• Analyzing search query
+• Scanning all documents
+• Computing similarity scores
+• Ranking results by relevance
+
+⏱️ Estimated time: 5-15 seconds
+
+<div style='text-align: center; margin: 20px;'>
+    <span style='font-size: 30px;'>🔍</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>📑</span>
+    <span style='font-size: 30px;'>➡️</span>
+    <span style='font-size: 30px;'>✅</span>
+</div>
+
+*Finding the most relevant content across your documents...*"""
+        
+        async def analyze_documents_async(session_id):
+            if not session_id:
+                return "❌ Please upload documents first!"
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                try:
+                    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+                    response = await client.get(
+                        f"{API_BASE_URL}/session/{session_id}/analysis",
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        output = "📊 **Document Analysis Results**\n\n"
+                        
+                        if not data.get("document_analyses"):
+                            return "⏳ Analyzing documents... This may take a moment for the first time.\n\nPlease click again in a few seconds."
+                        
+                        for filename, analysis in data["document_analyses"].items():
+                            output += f"### 📄 {filename}\n\n"
+                            
+                            stats = analysis.get("basic_stats", {})
+                            if stats:
+                                output += f"**📈 Statistics:**\n"
+                                output += f"- Words: {stats.get('word_count', 0):,}\n"
+                                output += f"- Sentences: {stats.get('sentence_count', 0)}\n"
+                                output += f"- Reading time: {stats.get('reading_time_minutes', 0):.1f} minutes\n"
+                                output += f"- Complexity score: {analysis.get('complexity_score', 0)}/100\n\n"
+                            
+                            output += f"**📑 Type:** {analysis.get('document_type', 'Unknown').title()}\n"
+                            
+                            topics = analysis.get('key_topics', [])
+                            if topics:
+                                output += f"**🏷️ Key Topics:** {', '.join(topics)}\n\n"
+                            
+                            summary = analysis.get('summary', '')
+                            if summary:
+                                output += f"**📝 Summary:**\n{summary}\n\n"
+                            
+                            output += "---\n\n"
+                        
+                        if "cross_document_insights" in data and data["cross_document_insights"]:
+                            insights = data["cross_document_insights"]
+                            output += "### 🔗 Cross-Document Insights\n\n"
+                            output += f"- Total documents: {insights.get('total_documents', 0)}\n"
+                            output += f"- Total words: {insights.get('total_words', 0):,}\n"
+                            output += f"- Average complexity: {insights.get('average_complexity', 0)}/100\n"
+                            output += f"- Total reading time: {insights.get('total_reading_time_minutes', 0):.1f} minutes\n"
+                            
+                            common_topics = insights.get('common_topics', [])
+                            if common_topics:
+                                output += f"- Common topics: {', '.join(common_topics)}\n"
+                        
+                        return output
+                    else:
+                        try:
+                            error_detail = response.json().get('detail', response.text)
+                        except:
+                            error_detail = response.text
+                        return f"❌ Error: {error_detail}"
+                except httpx.TimeoutException:
+                    return "⏱️ Analysis is taking longer than expected. The documents are being processed. Please try again in a moment."
+                except Exception as e:
+                    return f"❌ Error: {str(e)}\n\nPlease check if the API server is running on {API_BASE_URL}"
+        
+        async def generate_smart_questions_async(session_id, num_q):
+            if not session_id:
+                return "❌ Please upload documents first!"
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                try:
+                    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+                    response = await client.post(
+                        f"{API_BASE_URL}/session/{session_id}/smart-questions",
+                        params={"num_questions": int(num_q)},
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        output = "💡 **Suggested Questions**\n\n"
+                        
+                        if data.get("generated_from"):
+                            output += f"*Based on {', '.join(data['generated_from'])}*\n\n"
+                        
+                        questions = data.get("questions", [])
+                        if not questions:
+                            return "❌ No questions could be generated. Please ensure documents have been processed."
+                        
+                        for i, q in enumerate(questions, 1):
+                            emoji = {
+                                "factual": "📌",
+                                "analytical": "🔍",
+                                "comparative": "⚖️",
+                                "clarification": "❓"
+                            }.get(q.get("category", ""), "❔")
+                            
+                            output += f"{i}. {emoji} **{q.get('question', 'Question unavailable')}**\n"
+                            output += f"   *Category: {q.get('category', 'general')}*\n\n"
+                        
+                        output += "\n💡 *Copy any question to use in the Q&A tab!*"
+                        
+                        return output
+                    else:
+                        try:
+                            error_detail = response.json().get('detail', response.text)
+                        except:
+                            error_detail = response.text
+                        return f"❌ Error: {error_detail}"
+                except httpx.TimeoutException:
+                    return "⏱️ Question generation is taking longer than expected. Please try again."
+                except Exception as e:
+                    return f"❌ Error: {str(e)}"
+        
+        async def search_similar_content_async(session_id, query, threshold, top_k):
+            if not session_id:
+                return "❌ Please upload documents first!"
+            
+            if not query or not query.strip():
+                return "❌ Please enter a search query!"
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                try:
+                    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+                    response = await client.post(
+                        f"{API_BASE_URL}/session/{session_id}/similarity-search",
+                        params={
+                            "query": query.strip(),
+                            "threshold": float(threshold),
+                            "top_k": int(top_k)
+                        },
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        output = f"🔍 **Search Results for:** *{query}*\n\n"
+                        output += f"Searched across {data.get('total_documents_searched', 0)} documents\n\n"
+                        
+                        results = data.get("results", [])
+                        if results:
+                            for i, result in enumerate(results, 1):
+                                score = result.get("score", 0)
+                                score_bar = "█" * int(score * 10) + "░" * (10 - int(score * 10))
+                                
+                                output += f"### Result {i}\n"
+                                output += f"📄 **File:** {result.get('filename', 'Unknown')}\n"
+                                output += f"📊 **Similarity:** [{score_bar}] {score:.1%}\n"
+                                output += f"📝 **Content:**\n> {result.get('text', 'No content')}\n\n"
+                                output += "---\n\n"
+                        else:
+                            output += "No matching content found. Try:\n"
+                            output += "- Lowering the similarity threshold\n"
+                            output += "- Using different keywords\n"
+                            output += "- Checking if documents have been processed"
+                        
+                        return output
+                    else:
+                        try:
+                            error_detail = response.json().get('detail', response.text)
+                        except:
+                            error_detail = response.text
+                        return f"❌ Error: {error_detail}"
+                except httpx.TimeoutException:
+                    return "⏱️ Search is taking longer than expected. Please try again."
+                except Exception as e:
+                    return f"❌ Error: {str(e)}"
+        
+        analysis_btn.click(
+            fn=show_analysis_progress,
+            outputs=[analysis_output],
+            queue=False
+        ).then(
+            fn=analyze_documents_sync,
+            inputs=[session_state],
+            outputs=[analysis_output],
+            show_progress="full"
+        )
+        
+        generate_questions_btn.click(
+            fn=show_questions_progress,
+            outputs=[questions_output],
+            queue=False
+        ).then(
+            fn=generate_questions_sync,
+            inputs=[session_state, num_questions],
+            outputs=[questions_output],
+            show_progress="full"
+        )
+        
+        search_btn.click(
+            fn=show_search_progress,
+            outputs=[search_results],
+            queue=False
+        ).then(
+            fn=search_content_sync,
+            inputs=[session_state, search_query, search_threshold, search_top_k],
+            outputs=[search_results],
+            show_progress="full"
         )
         
         async def refresh_performance():
@@ -602,33 +950,264 @@ def create_interface():
         
         async def run_performance_benchmark(benchmark_type, concurrent_users):
             """Run performance benchmark"""
+            import os
+            from pathlib import Path
+            
             start_time = time.time()
-            results = []
+            
+            test_docs_path = Path("test_docs")
+            print(f"Looking for test_docs at: {test_docs_path.absolute()}")
+            
+            if not test_docs_path.exists():
+                return f"❌ test_docs folder not found at {test_docs_path.absolute()}\n\nPlease create the folder and add PDF files.", None
+            
+            pdf_files = list(test_docs_path.glob("*.pdf"))
+            print(f"Found {len(pdf_files)} PDF files: {[f.name for f in pdf_files]}")
+            
+            if not pdf_files:
+                return f"❌ No PDF files found in test_docs folder.\n\nPlease add at least one PDF file to: {test_docs_path.absolute()}", None
             
             if benchmark_type == "Quick Test":
-                test_file = list(Path("test_docs").glob("*.pdf"))[:1]
-                if test_file:
+                test_file = [str(pdf_files[0])]  # Convert Path to string
+                print(f"Using test file: {test_file[0]}")
+                
+                try:
                     upload_start = time.time()
-                    result = await upload_documents_with_metrics(test_file)
+                    upload_result = await upload_documents_with_metrics(test_file)
                     upload_time = time.time() - upload_start
                     
-                    if current_session_id:
-                        ask_start = time.time()
-                        await ask_question_with_metrics("What is this document about?", current_session_id)
-                        ask_time = time.time() - ask_start
+                    if not current_session_id:
+                        return f"❌ Upload failed. Result: {upload_result[0]}", None
+                    
+                    ask_start = time.time()
+                    ask_result = await ask_question_with_metrics("What is this document about?", current_session_id)
+                    ask_time = time.time() - ask_start
+                    
+                    total_time = time.time() - start_time
+                    
+                    file_size_mb = os.path.getsize(test_file[0]) / (1024 * 1024)
+                    
+                    return f"""✅ **Quick Test Complete**
                         
-                        total_time = time.time() - start_time
-                        
-                        return f"""✅ **Quick Test Complete**
-                        
+**Test File:** {Path(test_file[0]).name}
+**File Size:** {file_size_mb:.2f} MB
+
 **Results:**
 - Upload time: {upload_time:.2f}s
-- Query time: {ask_time:.2f}s
+- Query time: {ask_time:.2f}s  
 - Total time: {total_time:.2f}s
 
+**Performance Metrics:**
+- Upload speed: {file_size_mb / upload_time:.2f} MB/s
+- Processing speed: {1 / total_time:.2f} docs/sec
+
 **Performance Grade:** {'🟢 Excellent' if total_time < 5 else '🟡 Good' if total_time < 10 else '🔴 Needs Optimization'}""", get_performance_charts()
+                
+                except Exception as e:
+                    return f"❌ Benchmark error: {str(e)}\n\nCheck console for details.", None
             
-            return "❌ Benchmark failed - ensure test documents exist", None
+            elif benchmark_type == "Full Benchmark":
+                test_files = [str(f) for f in pdf_files[:3]]  # Use up to 3 files
+                results = []
+                
+                all_files = [str(f) for f in pdf_files[:3]]
+                
+                try:
+                    upload_start = time.time()
+                    upload_result = await upload_documents_with_metrics(all_files)
+                    upload_time = time.time() - upload_start
+                    
+                    test_session_id = current_session_id  # Save it before it gets overwritten
+                    
+                    if not test_session_id:
+                        return "❌ Upload failed in Full Benchmark", None
+                    
+                    questions = [
+                        "What is the main topic of these documents?",
+                        "Are there any dates mentioned?",
+                        "What are the key findings or conclusions?",
+                        "Summarize the documents in one paragraph."
+                    ]
+                    
+                    query_times = []
+                    for i, question in enumerate(questions):
+                        ask_start = time.time()
+                        await ask_question_with_metrics(question, test_session_id)
+                        query_time = time.time() - ask_start
+                        query_times.append(query_time)
+                        results.append({
+                            "question": question[:50] + "...",
+                            "query_time": query_time
+                        })
+                    
+                    total_time = time.time() - start_time
+                    
+                    total_size_mb = sum(os.path.getsize(f) / (1024 * 1024) for f in all_files)
+                    
+                    report = f"""📊 **Full Benchmark Complete**
+
+**Files Tested:** {len(all_files)} files ({total_size_mb:.2f} MB total)
+**Questions Asked:** {len(questions)}
+**Total Time:** {total_time:.2f}s
+
+**Upload Performance:**
+- Time: {upload_time:.2f}s
+- Speed: {total_size_mb / upload_time:.2f} MB/s
+
+**Query Performance:**
+"""
+                    for i, r in enumerate(results):
+                        report += f"\nQ{i+1}: {r['query_time']:.2f}s - {r['question']}"
+                    
+                    avg_query = sum(query_times) / len(query_times)
+                    report += f"""
+
+**Summary:**
+- Avg Query Time: {avg_query:.2f}s
+- Min Query Time: {min(query_times):.2f}s
+- Max Query Time: {max(query_times):.2f}s
+- Queries/second: {len(query_times) / sum(query_times):.2f}
+
+**Overall Grade:** {'🟢 Excellent' if avg_query < 3 else '🟡 Good' if avg_query < 5 else '🔴 Needs Optimization'}"""
+                    
+                    return report, get_performance_charts()
+                    
+                except Exception as e:
+                    return f"❌ Full Benchmark error: {str(e)}", None
+            
+            elif benchmark_type == "Stress Test":
+                import asyncio
+                
+                test_file = [str(pdf_files[0])]
+                file_size_mb = os.path.getsize(test_file[0]) / (1024 * 1024)
+                
+                async def simulate_user(user_id):
+                    """Simulate a single user session"""
+                    try:
+                        user_start = time.time()
+                        
+                        upload_start = time.time()
+                        
+                        async with httpx.AsyncClient(timeout=60.0) as client:
+                            with open(test_file[0], "rb") as f:
+                                file_content = f.read()
+                            
+                            upload_files = [
+                                ("files", (f"user{user_id}_{Path(test_file[0]).name}", file_content, "application/pdf"))
+                            ]
+                            
+                            headers = {"X-API-Key": API_KEY}
+                            response = await client.post(
+                                f"{API_BASE_URL}/upload",
+                                files=upload_files,
+                                headers=headers
+                            )
+                            
+                            if response.status_code != 200:
+                                raise Exception(f"Upload failed: {response.status_code}")
+                            
+                            data = response.json()
+                            user_session_id = data["session_id"]
+                            upload_time = time.time() - upload_start
+                        
+                        ask_start = time.time()
+                        async with httpx.AsyncClient(timeout=60.0) as client:
+                            response = await client.post(
+                                f"{API_BASE_URL}/ask",
+                                json={
+                                    "session_id": user_session_id,
+                                    "question": f"What is this document about? (User {user_id})"
+                                },
+                                headers=headers
+                            )
+                            
+                            if response.status_code != 200:
+                                raise Exception(f"Ask failed: {response.status_code}")
+                        
+                        ask_time = time.time() - ask_start
+                        total_user_time = time.time() - user_start
+                        
+                        return {
+                            "user_id": user_id,
+                            "session_id": user_session_id,
+                            "upload_time": upload_time,
+                            "query_time": ask_time,
+                            "total_time": total_user_time,
+                            "success": True
+                        }
+                    except Exception as e:
+                        return {
+                            "user_id": user_id,
+                            "error": str(e),
+                            "success": False
+                        }
+                
+                print(f"Starting stress test with {concurrent_users} concurrent users...")
+                tasks = [simulate_user(i+1) for i in range(concurrent_users)]
+                results = await asyncio.gather(*tasks)
+                
+                total_time = time.time() - start_time
+                successful = [r for r in results if r.get("success", False)]
+                failed = [r for r in results if not r.get("success", False)]
+                
+                if successful:
+                    avg_upload = sum(r['upload_time'] for r in successful) / len(successful)
+                    avg_query = sum(r['query_time'] for r in successful) / len(successful)
+                    avg_total = sum(r['total_time'] for r in successful) / len(successful)
+                    min_time = min(r['total_time'] for r in successful)
+                    max_time = max(r['total_time'] for r in successful)
+                else:
+                    avg_upload = avg_query = avg_total = min_time = max_time = 0
+                
+                report = f"""⚡ **Stress Test Complete**
+
+**Test Configuration:**
+- Concurrent Users: {concurrent_users}
+- Test File: {Path(test_file[0]).name} ({file_size_mb:.2f} MB)
+- Total Test Duration: {total_time:.2f}s
+
+**Results:**
+- Successful: {len(successful)}/{len(results)} ({len(successful)/len(results)*100:.1f}%)
+- Failed: {len(failed)}
+
+**Performance Metrics:**
+- Avg Upload Time: {avg_upload:.2f}s
+- Avg Query Time: {avg_query:.2f}s
+- Avg Total Time/User: {avg_total:.2f}s
+- Min Response Time: {min_time:.2f}s
+- Max Response Time: {max_time:.2f}s
+- Throughput: {len(successful)/total_time:.2f} successful requests/sec
+
+**Load Test Grade:** """
+                
+                if len(successful) == len(results) and avg_total < 5:
+                    report += "🟢 Excellent - System handles concurrent load well"
+                elif len(successful) >= len(results) * 0.8 and avg_total < 10:
+                    report += "🟡 Good - Some performance degradation under load"
+                else:
+                    report += "🔴 Needs Optimization - Significant issues under load"
+                
+                report += "\n\n**Sample Results:**"
+                for r in results[:5]:
+                    if r.get("success"):
+                        report += f"\n✅ User {r['user_id']}: {r['total_time']:.2f}s (Upload: {r['upload_time']:.2f}s, Query: {r['query_time']:.2f}s)"
+                    else:
+                        report += f"\n❌ User {r['user_id']}: Failed - {r.get('error', 'Unknown error')[:50]}"
+                
+                if len(results) > 5:
+                    report += f"\n... and {len(results)-5} more users"
+                
+                if failed:
+                    report += "\n\n**Failure Analysis:**"
+                    error_types = {}
+                    for f in failed:
+                        error = f.get('error', 'Unknown')[:30]
+                        error_types[error] = error_types.get(error, 0) + 1
+                    
+                    for error, count in error_types.items():
+                        report += f"\n- {error}: {count} occurrences"
+                
+                return report, get_performance_charts()
         
         run_benchmark_btn.click(
             fn=lambda t, c: asyncio.run(run_performance_benchmark(t, c)),
@@ -642,22 +1221,6 @@ def create_interface():
         )
     
     return demo
-
-async def clear_cache() -> str:
-    """Clear the cache"""
-    async with httpx.AsyncClient() as client:
-        try:
-            headers = {"X-API-Key": API_KEY}
-            response = await client.post(
-                f"{API_BASE_URL}/cache/clear",
-                headers=headers
-            )
-            if response.status_code == 200:
-                return "✅ Cache cleared successfully!"
-            else:
-                return "✅ Cache cleared (no auth required)"
-        except Exception as e:
-            return f"❌ Error: {str(e)}"
 
 if __name__ == "__main__":
     demo = create_interface()

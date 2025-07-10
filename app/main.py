@@ -14,6 +14,7 @@ from app.deepseek_client import DeepSeekClient
 from app.config import config
 from app.cache_manager import cache_manager
 from app.performance import performance_monitor, track_performance, CachePerformanceTracker
+from app.document_intelligence import document_intelligence
 
 app = FastAPI(
     title="AI-Driven Document Insight Service",
@@ -71,6 +72,14 @@ async def upload_documents(
         session_dir = UPLOAD_DIR / session_id
         session_dir.mkdir(exist_ok=True)
         
+        sessions[session_id] = {
+            "id": session_id,
+            "created_at": datetime.now().isoformat(),
+            "files": [],
+            "upload_dir": str(session_dir),
+            "extracted_texts": {}
+        }
+        
         uploaded_files = []
         errors = []
         total_size = 0
@@ -89,10 +98,9 @@ async def upload_documents(
                 safe_filename = f"{uuid.uuid4().hex}_{file.filename}"
                 file_path = session_dir / safe_filename
                 
-                # Track file size
-                file.file.seek(0, 2)  # Seek to end
+                file.file.seek(0, 2)
                 file_size = file.file.tell()
-                file.file.seek(0)  # Reset to beginning
+                file.file.seek(0)
                 total_size += file_size
                 
                 with open(file_path, "wb") as buffer:
@@ -105,12 +113,12 @@ async def upload_documents(
                     "size": file_size,
                     "upload_time": datetime.now().isoformat(),
                     "file_type": file_ext,
-                    "processing_time_ms": (time.time() - file_start_time) * 1000
+                    "processing_time_ms": (time.time() - file_start_time) * 1000,
+                    "analysis_pending": True
                 }
                 
                 uploaded_files.append(file_info)
                 
-                # Track individual file upload
                 performance_monitor.record_metric(
                     "file_upload_size_mb",
                     file_size / (1024 * 1024),
@@ -125,13 +133,11 @@ async def upload_documents(
             finally:
                 file.file.close()
         
-        sessions[session_id] = {
-            "id": session_id,
-            "created_at": datetime.now().isoformat(),
-            "files": uploaded_files,
-            "upload_dir": str(session_dir),
-            "total_size_mb": total_size / (1024 * 1024)
-        }
+        sessions[session_id]["files"] = uploaded_files
+        sessions[session_id]["total_size_mb"] = total_size / (1024 * 1024)
+        
+        if "cache_stats" in sessions[session_id]:
+            sessions[session_id]["cache_stats"]["total_files"] = len(uploaded_files)
         
         upload_time_ms = (time.time() - upload_start_time) * 1000
         
@@ -206,10 +212,9 @@ async def ask_question(
         if not session["files"]:
             raise HTTPException(status_code=400, detail="No files in session")
         
-        # Text extraction phase
         extraction_start = time.time()
         
-        if "extracted_texts" not in session:
+        if not session.get("extracted_texts"):
             print(f"Extracting text from {len(session['files'])} files...")
             extracted_texts = {}
             cache_hits = 0
@@ -281,7 +286,7 @@ async def ask_question(
             {
                 "extraction_time_ms": extraction_time,
                 "api_time_ms": api_time,
-                "cache_hits": session["cache_stats"].get("cache_hits", 0)
+                "cache_hits": session.get("cache_stats", {}).get("cache_hits", 0)
             }
         )
         
@@ -293,8 +298,8 @@ async def ask_question(
             processing_time=total_processing_time,
             extraction_time_ms=extraction_time,
             api_call_time_ms=api_time,
-            cache_hits=session["cache_stats"].get("cache_hits", 0),
-            cache_misses=session["cache_stats"].get("cache_misses", 0)
+            cache_hits=session.get("cache_stats", {}).get("cache_hits", 0),
+            cache_misses=session.get("cache_stats", {}).get("cache_misses", 0)
         )
 
 @app.get("/metrics", response_model=PerformanceMetrics)
@@ -396,6 +401,157 @@ async def get_performance_report(api_key: Optional[str] = Depends(get_api_key)):
         )
     
     return report
+
+@app.get("/session/{session_id}/analysis")
+async def get_document_analysis(session_id: str, api_key: Optional[str] = Depends(get_api_key)):
+    """Get document analysis for all files in a session"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[session_id]
+    analyses = {}
+    
+    for file_info in session["files"]:
+        if "analysis" not in file_info or file_info.get("analysis_pending", False):
+            if file_info["original_name"] not in session.get("extracted_texts", {}):
+                extraction_result = pdf_extractor.extract_text(file_info["path"])
+                if extraction_result["success"]:
+                    if "extracted_texts" not in session:
+                        session["extracted_texts"] = {}
+                    session["extracted_texts"][file_info["original_name"]] = extraction_result["text"]
+                    
+                    if "cache_stats" not in session:
+                        session["cache_stats"] = {"cache_hits": 0, "cache_misses": 0, "total_files": 0}
+                    
+                    if extraction_result.get("from_cache"):
+                        session["cache_stats"]["cache_hits"] += 1
+                    else:
+                        session["cache_stats"]["cache_misses"] += 1
+            
+            if file_info["original_name"] in session.get("extracted_texts", {}):
+                analysis = await document_intelligence.analyze_document(
+                    session["extracted_texts"][file_info["original_name"]], 
+                    file_info["original_name"]
+                )
+                file_info["analysis"] = analysis
+                file_info["analysis_pending"] = False
+        
+        if "analysis" in file_info:
+            analyses[file_info["original_name"]] = file_info["analysis"]
+    
+    cross_insights = {}
+    if len(analyses) > 1:
+        cross_insights = document_intelligence.get_cross_document_insights(analyses)
+    
+    return {
+        "session_id": session_id,
+        "document_analyses": analyses,
+        "cross_document_insights": cross_insights
+    }
+
+@app.post("/session/{session_id}/smart-questions")
+@track_performance("smart_questions_endpoint")
+async def get_smart_questions(
+    session_id: str,
+    num_questions: int = 5,
+    api_key: Optional[str] = Depends(get_api_key)
+):
+    """Generate smart questions based on uploaded documents"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[session_id]
+    
+    if "extracted_texts" not in session or not session["extracted_texts"]:
+        print(f"Performing lazy text extraction for {len(session['files'])} files...")
+        extracted_texts = {}
+        
+        if "cache_stats" not in session:
+            session["cache_stats"] = {"cache_hits": 0, "cache_misses": 0, "total_files": 0}
+        
+        for file_info in session["files"]:
+            extraction_result = pdf_extractor.extract_text(file_info["path"])
+            if extraction_result["success"]:
+                extracted_texts[file_info["original_name"]] = extraction_result["text"]
+                
+                if extraction_result.get("from_cache"):
+                    session["cache_stats"]["cache_hits"] += 1
+                else:
+                    session["cache_stats"]["cache_misses"] += 1
+        
+        session["extracted_texts"] = extracted_texts
+        session["cache_stats"]["total_files"] = len(session["files"])
+        
+        if not extracted_texts:
+            raise HTTPException(status_code=400, detail="No text could be extracted from documents")
+    
+    combined_text = "\n\n".join(session["extracted_texts"].values())
+    
+    questions = await document_intelligence.generate_smart_questions(
+        combined_text[:5000],  # Limit text for API
+        num_questions
+    )
+    
+    return {
+        "session_id": session_id,
+        "questions": questions,
+        "generated_from": list(session["extracted_texts"].keys())
+    }
+
+@app.post("/session/{session_id}/similarity-search")
+@track_performance("similarity_search_endpoint")
+async def similarity_search(
+    session_id: str,
+    query: str,
+    threshold: float = 0.3,
+    top_k: int = 5,
+    api_key: Optional[str] = Depends(get_api_key)
+):
+    """Search for similar content across uploaded documents"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[session_id]
+    
+    if "extracted_texts" not in session or not session["extracted_texts"]:
+        print(f"Performing lazy text extraction for {len(session['files'])} files...")
+        extracted_texts = {}
+        
+        if "cache_stats" not in session:
+            session["cache_stats"] = {"cache_hits": 0, "cache_misses": 0, "total_files": 0}
+        
+        for file_info in session["files"]:
+            extraction_result = pdf_extractor.extract_text(file_info["path"])
+            if extraction_result["success"]:
+                extracted_texts[file_info["original_name"]] = extraction_result["text"]
+                
+                if extraction_result.get("from_cache"):
+                    session["cache_stats"]["cache_hits"] += 1
+                else:
+                    session["cache_stats"]["cache_misses"] += 1
+        
+        session["extracted_texts"] = extracted_texts
+        session["cache_stats"]["total_files"] = len(session["files"])
+        
+        if not extracted_texts:
+            raise HTTPException(status_code=400, detail="No text could be extracted from documents")
+    
+    if not query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    
+    results = document_intelligence.similarity_search(
+        query,
+        session["extracted_texts"],
+        threshold,
+        top_k
+    )
+    
+    return {
+        "session_id": session_id,
+        "query": query,
+        "results": results,
+        "total_documents_searched": len(session["extracted_texts"])
+    }
 
 if __name__ == "__main__":
     import uvicorn

@@ -82,22 +82,25 @@ class CacheManager:
         hash_md5 = hashlib.md5()
         
         try:
-            with open(file_path, "rb") as f:
-                bytes_read = 0
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hash_md5.update(chunk)
-                    bytes_read += len(chunk)
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as f:
+                    bytes_read = 0
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        hash_md5.update(chunk)
+                        bytes_read += len(chunk)
+                
+                file_size = os.path.getsize(file_path)
+                
+                content_string = f"{hash_md5.hexdigest()}_{file_size}"
+            else:
+                content_string = file_path
             
-            file_size = os.path.getsize(file_path)
-            
-            content_string = f"{hash_md5.hexdigest()}_{file_size}"
             final_hash = hashlib.sha256(content_string.encode()).hexdigest()[:32]
             
             hash_time = (time.time() - hash_start) * 1000
             performance_monitor.record_metric(
                 "cache_hash_generation_ms",
-                hash_time,
-                {"file_size_mb": file_size / (1024 * 1024)}
+                hash_time
             )
             
             return final_hash
@@ -113,7 +116,7 @@ class CacheManager:
         """
         content_hash = self._get_content_hash(file_path)
         
-        filename = Path(file_path).name
+        filename = Path(file_path).name if os.path.exists(file_path) else file_path
         print(f"🔑 Cache key for {filename}: content_{content_hash[:8]}...")
         
         return f"doc_text_content_{content_hash}"
@@ -147,14 +150,14 @@ class CacheManager:
         
         return result
     
-    def set(self, file_path: str, result: Dict[str, Any], method: str = "", 
+    def set(self, file_path: str, result: Any, method: str = "", 
             ttl_hours: int = 24) -> bool:
         """
         Cache extraction result based on content with performance tracking
         
         Args:
             file_path: Path to the document
-            result: Extraction result to cache
+            result: Extraction result to cache (can be dict, list, or any serializable type)
             method: Extraction method used (stored but not used in key)
             ttl_hours: Time to live in hours
             
@@ -164,14 +167,27 @@ class CacheManager:
         set_start = time.time()
         cache_key = self._get_cache_key(file_path, method)
         
+        if isinstance(result, dict):
+            result_data = result
+            result_method = method or result.get("method", "")
+            result_size = len(json.dumps(result))
+        elif isinstance(result, list):
+            result_data = {"data": result, "type": "list"}
+            result_method = method
+            result_size = len(json.dumps(result))
+        else:
+            result_data = {"data": result, "type": type(result).__name__}
+            result_method = method
+            result_size = len(str(result))
+        
         cache_data = {
-            "result": result,
+            "result": result_data,
             "cached_at": datetime.now().isoformat(),
             "original_path": file_path,  # Store for reference
-            "method": method or result.get("method", ""),
+            "method": result_method,
             "expires_at": (datetime.now() + timedelta(hours=ttl_hours)).isoformat(),
             "content_hash": self._get_content_hash(file_path),
-            "result_size_kb": len(json.dumps(result)) / 1024  # Track cached data size
+            "result_size_kb": result_size / 1024  # Track cached data size
         }
         
         if self.cache_type == "redis" and self.redis_client:
@@ -197,7 +213,7 @@ class CacheManager:
         return success
     
     @track_performance("file_cache_get")
-    def _get_from_file(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _get_from_file(self, cache_key: str) -> Optional[Any]:
         """Get from file-based cache with performance tracking"""
         cache_file = self.cache_dir / f"{cache_key}.json"
         
@@ -235,7 +251,13 @@ class CacheManager:
             )
             
             print(f"📋 Cache hit! Using cached extraction (originally from: {Path(original_path).name})")
-            return cache_data["result"]
+            
+            result = cache_data["result"]
+            if isinstance(result, dict) and result.get("type") == "list":
+                return result["data"]
+            elif isinstance(result, dict) and "type" in result and "data" in result:
+                return result["data"]
+            return result
             
         except Exception as e:
             print(f"Cache read error: {e}")
@@ -271,7 +293,7 @@ class CacheManager:
             return False
     
     @track_performance("redis_cache_get")
-    def _get_from_redis(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _get_from_redis(self, cache_key: str) -> Optional[Any]:
         """Get from Redis cache with performance tracking"""
         try:
             cached = self.redis_client.get(cache_key)
@@ -286,7 +308,13 @@ class CacheManager:
                 )
                 
                 print(f"📋 Redis cache hit! (originally from: {Path(original_path).name})")
-                return cache_data["result"]
+                
+                result = cache_data["result"]
+                if isinstance(result, dict) and result.get("type") == "list":
+                    return result["data"]
+                elif isinstance(result, dict) and "type" in result and "data" in result:
+                    return result["data"]
+                return result
             else:
                 self.stats["misses"] += 1
                 return None
@@ -341,7 +369,6 @@ class CacheManager:
                 )
             
             elif self.cache_type == "redis" and self.redis_client:
-                # Get Redis memory usage
                 info = self.redis_client.info("memory")
                 used_memory_mb = info.get("used_memory", 0) / (1024 * 1024)
                 

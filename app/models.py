@@ -138,3 +138,35 @@ class APIStats(BaseModel):
     avg_cost_per_request: str
     avg_tokens_per_request: float
     performance_metrics: Dict[str, Any]
+
+class DocumentAnalysis(BaseModel):
+    """Document analysis results"""
+    filename: str
+    timestamp: str
+    basic_stats: Dict[str, Any]
+    complexity_score: float
+    key_topics: List[str]
+    document_type: str
+    language_features: Dict[str, Any]
+    summary: str
+
+class SmartQuestion(BaseModel):
+    """Smart question model"""
+    question: str
+    category: str
+
+class SimilarityResult(BaseModel):
+    """Similarity search result"""
+    score: float
+    filename: str
+    chunk_index: int
+    text: str
+    full_text: str
+
+class DocumentIntelligenceResponse(BaseModel):
+    """Response for document intelligence features"""
+    session_id: str
+    document_analyses: Optional[Dict[str, DocumentAnalysis]] = None
+    cross_document_insights: Optional[Dict[str, Any]] = None
+    questions: Optional[List[SmartQuestion]] = None
+    similarity_results: Optional[List[SimilarityResult]] = None

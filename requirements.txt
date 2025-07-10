@@ -1,39 +1,44 @@
 # Core Web Framework
-fastapi
-uvicorn
-python-multipart
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
 
-# PDF Processing - Multiple Options
-pypdf2                  # For standard PDF text extraction
-PyMuPDF                 # For complex PDFs and image extraction
-pillow                  # For image processing
+# PDF Processing
+pypdf2==3.0.1
+PyMuPDF==1.23.8
+pillow==10.1.0
 
-# OCR Capabilities (for scanned PDFs)
-easyocr                 # For OCR on scanned documents/images
+# OCR Capabilities
+easyocr==1.7.0
 
-# API Calls for DeepSeek
-httpx
-python-dotenv
+# API Calls
+httpx==0.25.2
+python-dotenv==1.0.0
 
 # Data Processing
-pydantic               # Data validation
-python-jose[cryptography]  # For JWT if you add auth later
+pydantic==2.5.2
+python-jose[cryptography]==3.3.0
 
 # File handling
-aiofiles               # Async file operations
+aiofiles==23.2.1
 
-# Optional
-numpy                  # EasyOCR dependency, useful for processing
-opencv-python-headless # Better than opencv-python for servers
+# Machine Learning & Data
+numpy==1.26.2
+opencv-python-headless==4.8.1.78
+scikit-learn==1.3.2
+pandas==2.1.4
 
-# Caching (Optional)
-redis                  # For Redis caching support
+# UI & Visualization
+gradio==4.8.0
+plotly==5.18.0
+matplotlib==3.8.2
 
-#UI
-gradio
-plotly
+# Performance & System
+psutil==5.9.6
 
-# Performance monitoring
-psutil
-matplotlib
-pandas
+# Optional: Caching
+redis==5.0.1
+
+# Optional: Better async support
+asyncio==3.4.3
+nest-asyncio==1.5.8
