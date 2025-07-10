@@ -31,3 +31,9 @@ redis                  # For Redis caching support
 
 #UI
 gradio
+plotly
+
+# Performance monitoring
+psutil
+matplotlib
+pandas

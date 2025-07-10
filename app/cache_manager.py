@@ -1,5 +1,5 @@
 """
-Cache Manager for Document Text Extraction
+Cache Manager for Document Text Extraction with Performance Monitoring
 Supports both file-based cache and Redis (configurable)
 Uses content-based hashing for cross-session cache hits
 """
@@ -10,7 +10,9 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any
 import pickle
+import time
 from app.config import config
+from app.performance import performance_monitor, CachePerformanceTracker, track_performance
 
 try:
     import redis
@@ -20,15 +22,17 @@ except ImportError:
 
 
 class CacheManager:
-    """Manages caching of extracted text from documents"""
+    """Manages caching of extracted text from documents with performance monitoring"""
     
     def __init__(self, cache_type: str = "file"):
         """
-        Initialize cache manager
+        Initialize cache manager with performance tracking
         
         Args:
             cache_type: 'file' for file-based cache, 'redis' for Redis cache
         """
+        init_start = time.time()
+        
         self.cache_type = cache_type
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)
@@ -36,6 +40,7 @@ class CacheManager:
         self.redis_client = None
         if cache_type == "redis" and REDIS_AVAILABLE:
             try:
+                redis_start = time.time()
                 self.redis_client = redis.Redis(
                     host=os.getenv("REDIS_HOST", "localhost"),
                     port=int(os.getenv("REDIS_PORT", 6379)),
@@ -44,7 +49,11 @@ class CacheManager:
                 )
                 self.redis_client.ping()
                 self.cache_type = "redis"
-                print("✅ Redis cache initialized")
+                
+                redis_init_time = (time.time() - redis_start) * 1000
+                performance_monitor.record_metric("redis_init_time_ms", redis_init_time)
+                
+                print(f"✅ Redis cache initialized in {redis_init_time:.2f}ms")
             except Exception as e:
                 print(f"⚠️ Redis not available, falling back to file cache: {e}")
                 self.cache_type = "file"
@@ -54,23 +63,44 @@ class CacheManager:
             "misses": 0,
             "saves": 0
         }
+        
+        self._update_cache_size_metrics()
+        
+        init_time = (time.time() - init_start) * 1000
+        performance_monitor.record_metric(
+            "cache_manager_init_time_ms",
+            init_time,
+            {"cache_type": self.cache_type}
+        )
     
     def _get_content_hash(self, file_path: str) -> str:
         """
-        Generate hash based on file content only (not path)
+        Generate hash based on file content only (not path) with performance tracking
         This enables cross-session cache hits for identical files
         """
+        hash_start = time.time()
         hash_md5 = hashlib.md5()
         
         try:
             with open(file_path, "rb") as f:
+                bytes_read = 0
                 for chunk in iter(lambda: f.read(4096), b""):
                     hash_md5.update(chunk)
+                    bytes_read += len(chunk)
             
             file_size = os.path.getsize(file_path)
             
             content_string = f"{hash_md5.hexdigest()}_{file_size}"
-            return hashlib.sha256(content_string.encode()).hexdigest()[:32]
+            final_hash = hashlib.sha256(content_string.encode()).hexdigest()[:32]
+            
+            hash_time = (time.time() - hash_start) * 1000
+            performance_monitor.record_metric(
+                "cache_hash_generation_ms",
+                hash_time,
+                {"file_size_mb": file_size / (1024 * 1024)}
+            )
+            
+            return final_hash
             
         except Exception as e:
             print(f"Error hashing file {file_path}: {e}")
@@ -90,7 +120,7 @@ class CacheManager:
     
     def get(self, file_path: str, method: str = "") -> Optional[Dict[str, Any]]:
         """
-        Get cached extraction result based on content
+        Get cached extraction result based on content with performance tracking
         
         Args:
             file_path: Path to the document
@@ -99,17 +129,28 @@ class CacheManager:
         Returns:
             Cached result or None if not found/expired
         """
+        get_start = time.time()
         cache_key = self._get_cache_key(file_path, method)
         
         if self.cache_type == "redis" and self.redis_client:
-            return self._get_from_redis(cache_key)
+            result = self._get_from_redis(cache_key)
         else:
-            return self._get_from_file(cache_key)
+            result = self._get_from_file(cache_key)
+        
+        get_duration = time.time() - get_start
+        
+        CachePerformanceTracker.track_cache_operation(
+            "get",
+            result is not None,
+            get_duration
+        )
+        
+        return result
     
     def set(self, file_path: str, result: Dict[str, Any], method: str = "", 
             ttl_hours: int = 24) -> bool:
         """
-        Cache extraction result based on content
+        Cache extraction result based on content with performance tracking
         
         Args:
             file_path: Path to the document
@@ -120,6 +161,7 @@ class CacheManager:
         Returns:
             Success status
         """
+        set_start = time.time()
         cache_key = self._get_cache_key(file_path, method)
         
         cache_data = {
@@ -128,16 +170,35 @@ class CacheManager:
             "original_path": file_path,  # Store for reference
             "method": method or result.get("method", ""),
             "expires_at": (datetime.now() + timedelta(hours=ttl_hours)).isoformat(),
-            "content_hash": self._get_content_hash(file_path)
+            "content_hash": self._get_content_hash(file_path),
+            "result_size_kb": len(json.dumps(result)) / 1024  # Track cached data size
         }
         
         if self.cache_type == "redis" and self.redis_client:
-            return self._set_to_redis(cache_key, cache_data, ttl_hours)
+            success = self._set_to_redis(cache_key, cache_data, ttl_hours)
         else:
-            return self._set_to_file(cache_key, cache_data)
+            success = self._set_to_file(cache_key, cache_data)
+        
+        set_duration = time.time() - set_start
+        
+        performance_monitor.record_metric(
+            "cache_set_duration_ms",
+            set_duration * 1000,
+            {
+                "cache_type": self.cache_type,
+                "data_size_kb": cache_data["result_size_kb"],
+                "ttl_hours": ttl_hours
+            }
+        )
+        
+        if success:
+            self._update_cache_size_metrics()
+        
+        return success
     
+    @track_performance("file_cache_get")
     def _get_from_file(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Get from file-based cache"""
+        """Get from file-based cache with performance tracking"""
         cache_file = self.cache_dir / f"{cache_key}.json"
         
         if not cache_file.exists():
@@ -145,17 +206,34 @@ class CacheManager:
             return None
         
         try:
+            read_start = time.time()
             with open(cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
+            
+            read_time = (time.time() - read_start) * 1000
             
             expires_at = datetime.fromisoformat(cache_data["expires_at"])
             if datetime.now() > expires_at:
                 cache_file.unlink()
                 self.stats["misses"] += 1
+                
+                performance_monitor.record_metric(
+                    "cache_expired_entries",
+                    1,
+                    {"cache_key": cache_key[:20]}
+                )
+                
                 return None
             
             self.stats["hits"] += 1
             original_path = cache_data.get('original_path', 'unknown')
+            
+            performance_monitor.record_metric(
+                "file_cache_read_time_ms",
+                read_time,
+                {"file_size_kb": cache_file.stat().st_size / 1024}
+            )
+            
             print(f"📋 Cache hit! Using cached extraction (originally from: {Path(original_path).name})")
             return cache_data["result"]
             
@@ -164,30 +242,49 @@ class CacheManager:
             self.stats["misses"] += 1
             return None
     
+    @track_performance("file_cache_set")
     def _set_to_file(self, cache_key: str, cache_data: Dict[str, Any]) -> bool:
-        """Save to file-based cache"""
+        """Save to file-based cache with performance tracking"""
         cache_file = self.cache_dir / f"{cache_key}.json"
         
         try:
+            write_start = time.time()
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
             
+            write_time = (time.time() - write_start) * 1000
+            file_size_kb = cache_file.stat().st_size / 1024
+            
             self.stats["saves"] += 1
-            print(f"💾 Cached extraction (content-based key: {cache_key[:20]}...)")
+            
+            performance_monitor.record_metric(
+                "file_cache_write_time_ms",
+                write_time,
+                {"file_size_kb": file_size_kb}
+            )
+            
+            print(f"💾 Cached extraction (content-based key: {cache_key[:20]}..., size: {file_size_kb:.2f}KB)")
             return True
             
         except Exception as e:
             print(f"Cache write error: {e}")
             return False
     
+    @track_performance("redis_cache_get")
     def _get_from_redis(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Get from Redis cache"""
+        """Get from Redis cache with performance tracking"""
         try:
             cached = self.redis_client.get(cache_key)
             if cached:
                 cache_data = pickle.loads(cached)
                 self.stats["hits"] += 1
                 original_path = cache_data.get('original_path', 'unknown')
+                
+                performance_monitor.record_metric(
+                    "redis_cache_data_size_kb",
+                    len(cached) / 1024
+                )
+                
                 print(f"📋 Redis cache hit! (originally from: {Path(original_path).name})")
                 return cache_data["result"]
             else:
@@ -198,27 +295,70 @@ class CacheManager:
             self.stats["misses"] += 1
             return None
     
+    @track_performance("redis_cache_set")
     def _set_to_redis(self, cache_key: str, cache_data: Dict[str, Any], 
                       ttl_hours: int) -> bool:
-        """Save to Redis cache"""
+        """Save to Redis cache with performance tracking"""
         try:
             serialized = pickle.dumps(cache_data)
+            data_size_kb = len(serialized) / 1024
+            
             self.redis_client.setex(
                 cache_key,
                 timedelta(hours=ttl_hours),
                 serialized
             )
+            
             self.stats["saves"] += 1
-            print(f"💾 Redis cached (content-based key: {cache_key[:20]}...)")
+            
+            performance_monitor.record_metric(
+                "redis_cache_data_size_kb",
+                data_size_kb,
+                {"ttl_hours": ttl_hours}
+            )
+            
+            print(f"💾 Redis cached (content-based key: {cache_key[:20]}..., size: {data_size_kb:.2f}KB)")
             return True
         except Exception as e:
             print(f"Redis set error: {e}")
             return False
     
+    def _update_cache_size_metrics(self):
+        """Update cache size metrics"""
+        try:
+            if self.cache_type == "file":
+                total_size = 0
+                file_count = 0
+                
+                for cache_file in self.cache_dir.glob("*.json"):
+                    total_size += cache_file.stat().st_size
+                    file_count += 1
+                
+                performance_monitor.record_metric(
+                    "cache_total_size_mb",
+                    total_size / (1024 * 1024),
+                    {"file_count": file_count}
+                )
+            
+            elif self.cache_type == "redis" and self.redis_client:
+                # Get Redis memory usage
+                info = self.redis_client.info("memory")
+                used_memory_mb = info.get("used_memory", 0) / (1024 * 1024)
+                
+                performance_monitor.record_metric(
+                    "redis_memory_usage_mb",
+                    used_memory_mb
+                )
+        except Exception as e:
+            print(f"Error updating cache size metrics: {e}")
+    
+    @track_performance("cache_clear_expired")
     def clear_expired(self):
-        """Clear expired entries from file cache"""
+        """Clear expired entries from file cache with performance tracking"""
         if self.cache_type == "file":
+            clear_start = time.time()
             cleared = 0
+            
             for cache_file in self.cache_dir.glob("*.json"):
                 try:
                     with open(cache_file, 'r') as f:
@@ -231,13 +371,24 @@ class CacheManager:
                 except:
                     pass
             
+            clear_time = (time.time() - clear_start) * 1000
+            
+            performance_monitor.record_metric(
+                "cache_clear_expired_time_ms",
+                clear_time,
+                {"cleared_count": cleared}
+            )
+            
             if cleared > 0:
-                print(f"🧹 Cleared {cleared} expired cache entries")
+                print(f"🧹 Cleared {cleared} expired cache entries in {clear_time:.2f}ms")
+                self._update_cache_size_metrics()
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
+        """Get cache statistics with performance metrics"""
         total_requests = self.stats["hits"] + self.stats["misses"]
         hit_rate = (self.stats["hits"] / total_requests * 100) if total_requests > 0 else 0
+        
+        cache_perf = CachePerformanceTracker.get_cache_performance()
         
         return {
             "cache_type": self.cache_type,
@@ -245,25 +396,48 @@ class CacheManager:
             "misses": self.stats["misses"],
             "saves": self.stats["saves"],
             "hit_rate": f"{hit_rate:.1f}%",
-            "total_requests": total_requests
+            "total_requests": total_requests,
+            "performance": {
+                "avg_hit_time_ms": cache_perf["avg_hit_time_ms"],
+                "avg_miss_time_ms": cache_perf["avg_miss_time_ms"],
+                "speedup_factor": cache_perf["cache_speedup"]
+            }
         }
     
+    @track_performance("cache_clear_all")
     def clear_all(self):
-        """Clear all cache entries"""
+        """Clear all cache entries with performance tracking"""
+        clear_start = time.time()
+        
         if self.cache_type == "file":
+            cleared = 0
             for cache_file in self.cache_dir.glob("*.json"):
                 cache_file.unlink()
-            print("🧹 Cleared all file cache")
+                cleared += 1
+            print(f"🧹 Cleared {cleared} file cache entries")
+            
         elif self.cache_type == "redis" and self.redis_client:
+            cleared = 0
             for key in self.redis_client.scan_iter("doc_text_content_*"):
                 self.redis_client.delete(key)
-            print("🧹 Cleared all Redis cache entries")
+                cleared += 1
+            print(f"🧹 Cleared {cleared} Redis cache entries")
+        
+        clear_time = (time.time() - clear_start) * 1000
+        
+        performance_monitor.record_metric(
+            "cache_clear_all_time_ms",
+            clear_time,
+            {"cache_type": self.cache_type}
+        )
         
         self.stats = {
             "hits": 0,
             "misses": 0,
             "saves": 0
         }
+        
+        self._update_cache_size_metrics()
 
 
 cache_manager = CacheManager(cache_type=os.getenv("CACHE_TYPE", "file"))

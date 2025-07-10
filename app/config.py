@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    """Application configuration"""
+    """Application configuration with performance settings"""
     
     # DeepSeek API
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
@@ -34,5 +34,54 @@ class Config:
     DEFAULT_MODEL = "deepseek-chat"
     MAX_TOKENS = 2000
     TEMPERATURE = 0.7
+    
+    # Performance monitoring settings
+    ENABLE_PERFORMANCE_MONITORING = os.getenv("ENABLE_PERFORMANCE_MONITORING", "true").lower() == "true"
+    PERFORMANCE_METRICS_MAX_HISTORY = int(os.getenv("PERFORMANCE_METRICS_MAX_HISTORY", "1000"))
+    PERFORMANCE_LOG_SLOW_REQUESTS = os.getenv("PERFORMANCE_LOG_SLOW_REQUESTS", "true").lower() == "true"
+    SLOW_REQUEST_THRESHOLD_MS = int(os.getenv("SLOW_REQUEST_THRESHOLD_MS", "5000"))
+    
+    # API settings
+    ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "demo-api-key-2024")
+    ENABLE_API_KEY_AUTH = os.getenv("ENABLE_API_KEY_AUTH", "false").lower() == "true"
+    
+    # Performance optimization settings
+    ENABLE_REQUEST_CACHING = os.getenv("ENABLE_REQUEST_CACHING", "true").lower() == "true"
+    ENABLE_RESPONSE_COMPRESSION = os.getenv("ENABLE_RESPONSE_COMPRESSION", "true").lower() == "true"
+    MAX_CONTEXT_LENGTH = int(os.getenv("MAX_CONTEXT_LENGTH", "8000"))
+    
+    # Resource limits
+    MAX_MEMORY_MB = int(os.getenv("MAX_MEMORY_MB", "1024"))  # Max memory usage before warning
+    MAX_CPU_PERCENT = int(os.getenv("MAX_CPU_PERCENT", "80"))  # Max CPU usage before warning
+    
+    # Benchmark settings
+    BENCHMARK_SAMPLE_FILES_DIR = Path("test_docs")
+    BENCHMARK_SAMPLE_FILES_DIR.mkdir(exist_ok=True)
+    
+    # Logging settings
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_PERFORMANCE_METRICS = os.getenv("LOG_PERFORMANCE_METRICS", "true").lower() == "true"
+    
+    # OCR settings
+    OCR_LANGUAGES = os.getenv("OCR_LANGUAGES", "en").split(",")
+    OCR_GPU_ENABLED = os.getenv("OCR_GPU_ENABLED", "false").lower() == "true"
+    
+    @classmethod
+    def get_performance_config(cls) -> dict:
+        """Get performance-related configuration as dict"""
+        return {
+            "monitoring_enabled": cls.ENABLE_PERFORMANCE_MONITORING,
+            "metrics_history": cls.PERFORMANCE_METRICS_MAX_HISTORY,
+            "slow_request_threshold_ms": cls.SLOW_REQUEST_THRESHOLD_MS,
+            "resource_limits": {
+                "max_memory_mb": cls.MAX_MEMORY_MB,
+                "max_cpu_percent": cls.MAX_CPU_PERCENT
+            },
+            "optimizations": {
+                "request_caching": cls.ENABLE_REQUEST_CACHING,
+                "response_compression": cls.ENABLE_RESPONSE_COMPRESSION,
+                "max_context_length": cls.MAX_CONTEXT_LENGTH
+            }
+        }
 
 config = Config()
