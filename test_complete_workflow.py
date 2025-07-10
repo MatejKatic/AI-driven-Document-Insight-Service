@@ -17,14 +17,12 @@ async def test_complete_workflow_with_cache():
         print("Please add some PDF files to test_docs/ folder")
         return
     
-    # Clear cache for clean test
     cache_manager.clear_all()
     print("🧹 Cleared cache for clean test\n")
     
     async with httpx.AsyncClient() as client:
         print("🚀 Starting Document Insight Service test with cache metrics...\n")
         
-        # Get initial cache stats
         initial_stats = cache_manager.get_stats()
         
         # ========== FIRST RUN (NO CACHE) ==========
@@ -85,7 +83,6 @@ async def test_complete_workflow_with_cache():
             print(f"⏱️  Processing time: {ask_time_1:.2f}s")
             print(f"📚 Sources: {', '.join(answer_data['sources'])}")
         
-        # Get session info to check cache performance
         session_response = await client.get(f"http://localhost:8000/session/{session_id_1}")
         if session_response.status_code == 200:
             session_info = session_response.json()
@@ -97,7 +94,6 @@ async def test_complete_workflow_with_cache():
         total_time_1 = upload_time_1 + ask_time_1
         print(f"\n⏱️  Total time for first run: {total_time_1:.2f}s")
         
-        # Get cache stats after first run
         stats_response = await client.get("http://localhost:8000/cache/stats")
         stats_1 = stats_response.json()["cache_stats"]
         print(f"\n📈 Cache Statistics After First Run:")
@@ -114,7 +110,7 @@ async def test_complete_workflow_with_cache():
         
         print("\n📤 Step 1: Uploading same documents (Second Session)...")
         files = []
-        for file_path in test_files[:2]:  # Same files
+        for file_path in test_files[:2]:
             files.append(
                 ("files", (file_path.name, open(file_path, "rb"), "application/pdf"))
             )
@@ -156,7 +152,6 @@ async def test_complete_workflow_with_cache():
             print(f"✅ Answer received")
             print(f"⏱️  Processing time: {ask_time_2:.2f}s")
         
-        # Get session info to check cache performance
         session_response = await client.get(f"http://localhost:8000/session/{session_id_2}")
         if session_response.status_code == 200:
             session_info = session_response.json()
@@ -192,7 +187,6 @@ async def test_complete_workflow_with_cache():
         print(f"     - Upload: {upload_time_2:.2f}s")
         print(f"     - Q&A: {ask_time_2:.2f}s (uses cache)")
         
-        # Final cache statistics
         stats_response = await client.get("http://localhost:8000/cache/stats")
         final_stats = stats_response.json()["cache_stats"]
         

@@ -12,7 +12,6 @@ from typing import Dict, Optional, Any
 import pickle
 from app.config import config
 
-# Try to import Redis, but don't fail if not available
 try:
     import redis
     REDIS_AVAILABLE = True
@@ -34,7 +33,6 @@ class CacheManager:
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)
         
-        # Redis configuration
         self.redis_client = None
         if cache_type == "redis" and REDIS_AVAILABLE:
             try:
@@ -42,9 +40,8 @@ class CacheManager:
                     host=os.getenv("REDIS_HOST", "localhost"),
                     port=int(os.getenv("REDIS_PORT", 6379)),
                     db=int(os.getenv("REDIS_DB", 0)),
-                    decode_responses=False  # We'll handle encoding
+                    decode_responses=False
                 )
-                # Test connection
                 self.redis_client.ping()
                 self.cache_type = "redis"
                 print("✅ Redis cache initialized")
@@ -52,7 +49,6 @@ class CacheManager:
                 print(f"⚠️ Redis not available, falling back to file cache: {e}")
                 self.cache_type = "file"
         
-        # Cache statistics
         self.stats = {
             "hits": 0,
             "misses": 0,
@@ -68,20 +64,16 @@ class CacheManager:
         
         try:
             with open(file_path, "rb") as f:
-                # Read file in chunks to handle large files
                 for chunk in iter(lambda: f.read(4096), b""):
                     hash_md5.update(chunk)
             
-            # Get file size for additional uniqueness
             file_size = os.path.getsize(file_path)
             
-            # Create hash from content + size only (no path!)
             content_string = f"{hash_md5.hexdigest()}_{file_size}"
             return hashlib.sha256(content_string.encode()).hexdigest()[:32]
             
         except Exception as e:
             print(f"Error hashing file {file_path}: {e}")
-            # Fallback to path-based hash if content reading fails
             return hashlib.sha256(str(file_path).encode()).hexdigest()[:32]
     
     def _get_cache_key(self, file_path: str, method: str = "") -> str:
@@ -91,7 +83,6 @@ class CacheManager:
         """
         content_hash = self._get_content_hash(file_path)
         
-        # Debug logging to show cache key generation
         filename = Path(file_path).name
         print(f"🔑 Cache key for {filename}: content_{content_hash[:8]}...")
         
@@ -131,7 +122,6 @@ class CacheManager:
         """
         cache_key = self._get_cache_key(file_path, method)
         
-        # Add metadata
         cache_data = {
             "result": result,
             "cached_at": datetime.now().isoformat(),
@@ -158,10 +148,8 @@ class CacheManager:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
-            # Check expiration
             expires_at = datetime.fromisoformat(cache_data["expires_at"])
             if datetime.now() > expires_at:
-                # Expired, remove file
                 cache_file.unlink()
                 self.stats["misses"] += 1
                 return None
@@ -267,12 +255,10 @@ class CacheManager:
                 cache_file.unlink()
             print("🧹 Cleared all file cache")
         elif self.cache_type == "redis" and self.redis_client:
-            # Clear only our keys (with prefix)
             for key in self.redis_client.scan_iter("doc_text_content_*"):
                 self.redis_client.delete(key)
             print("🧹 Cleared all Redis cache entries")
         
-        # Reset statistics
         self.stats = {
             "hits": 0,
             "misses": 0,
@@ -280,5 +266,4 @@ class CacheManager:
         }
 
 
-# Global cache manager instance
 cache_manager = CacheManager(cache_type=os.getenv("CACHE_TYPE", "file"))

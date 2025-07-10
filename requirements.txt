@@ -28,3 +28,6 @@ opencv-python-headless # Better than opencv-python for servers
 
 # Caching (Optional)
 redis                  # For Redis caching support
+
+#UI
+gradio
