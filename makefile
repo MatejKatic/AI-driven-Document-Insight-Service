@@ -7,6 +7,7 @@ help:
 	@echo ""
 	@echo "🚀 Quick Start:"
 	@echo "  make demo        - Run in demo mode (no API key needed)"
+	@echo "  make demo-localai - Run with LocalAI (free AI alternative)"
 	@echo "  make demo-redis  - Run demo mode with Redis cache"
 	@echo "  make up          - Start all services"
 	@echo "  make down        - Stop all services"
@@ -24,6 +25,7 @@ help:
 	@echo "  make clean       - Clean up containers and volumes"
 	@echo "  make clean-cache - Clean cache files only"
 	@echo "  make test        - Run tests in container"
+	@echo "  make down-localai - Stop LocalAI services"
 	@echo ""
 	@echo "📝 Configuration:"
 	@echo "  Edit .env to add your DeepSeek API key"
@@ -182,3 +184,30 @@ api:
 	@echo "Opening API docs in browser..."
 	@python -m webbrowser http://localhost:8000/docs 2>/dev/null || \
 		echo "Please open http://localhost:8000/docs in your browser"
+
+
+demo-localai: setup
+	@echo "🚀 Starting with LocalAI (Free AI Alternative)..."
+	@echo "=================================================="
+	docker-compose -f docker-compose.localai.yml up -d
+	@sleep 10
+	@echo ""
+	@echo "✅ Services started with LocalAI!"
+	@echo ""
+	@echo "📌 Access points:"
+	@echo "   - 🎨 Gradio UI: http://localhost:7860"
+	@echo "   - 📚 API Docs:  http://localhost:8000/docs"
+	@echo "   - 🔌 API Root:  http://localhost:8000"
+	@echo "   - 🤖 LocalAI:   http://localhost:8080"
+	@echo ""
+	@echo "💡 Note: First run may take time to download AI models"
+	@echo "📝 Check progress: docker logs localai-server"
+
+down-localai:
+	docker-compose -f docker-compose.localai.yml down
+
+clean-localai:
+	@echo "🧹 Cleaning up LocalAI..."
+	docker-compose -f docker-compose.localai.yml down -v
+	rm -rf models/* 2>/dev/null || true
+	@echo "✅ LocalAI cleaned"
