@@ -2,12 +2,13 @@
 
 A Python-based REST API that ingests PDF and image documents (including scanned contracts and invoices), extracts text, and answers user questions using AI.
 
-
-<img width="1517" height="888" alt="image" src="https://github.com/user-attachments/assets/0cf4e7f7-fdf8-4e9c-b6ad-80f5ff11d0a3" />
-<img width="1564" height="841" alt="image" src="https://github.com/user-attachments/assets/cd4273e5-1548-4090-90dc-51d101b817fa" />
-<img width="2031" height="1280" alt="image" src="https://github.com/user-attachments/assets/f3f3d4c3-6d57-4ce1-b9cd-878d4a162e9b" />
-<img width="1940" height="1202" alt="image" src="https://github.com/user-attachments/assets/13784340-1bfb-455a-b56e-2f5ff91d2f6d" />
-
+<div align="center">
+  <img width="2269" height="1293" alt="image" src="https://github.com/user-attachments/assets/f52d1dd6-cdc9-4aaf-bb4e-4df5dbe54cd0" />
+  <img width="1564" height="841" alt="Document Analysis" src="https://github.com/user-attachments/assets/cd4273e5-1548-4090-90dc-51d101b817fa" />
+  <img width="2144" height="1264" alt="image" src="https://github.com/user-attachments/assets/eb647efb-3df2-49e6-83fe-c01a48a7e5b3" />
+  <img width="2031" height="1280" alt="Performance Dashboard" src="https://github.com/user-attachments/assets/f3f3d4c3-6d57-4ce1-b9cd-878d4a162e9b" />
+  <img width="1940" height="1202" alt="API Documentation" src="https://github.com/user-attachments/assets/13784340-1bfb-455a-b56e-2f5ff91d2f6d" />
+</div>
 
 ## ✨ Features
 
@@ -15,22 +16,25 @@ A Python-based REST API that ingests PDF and image documents (including scanned 
 - 🚀 REST API with FastAPI providing `/upload` and `/ask` endpoints
 - 📄 Multi-format document ingestion: PDF and images (PNG, JPG, JPEG, TIFF, BMP)
 - 🧠 Intelligent text extraction: PyMuPDF for PDFs, EasyOCR for images and scanned documents
-- 🤖 AI-powered Q&A using DeepSeek API
+- 🤖 AI-powered Q&A using multiple providers (Mock/LocalAI/DeepSeek)
 - 🐳 Dockerized application with docker-compose
 
 ### Optional Enhancement Implemented:
 - ⚡ High-performance caching layer with file-based and Redis support
 
 ### Additional Features:
-- 🎭 Mock DeepSeek API for testing without API key
+- 🎭 Mock DeepSeek API for basic testing
+- 🆓 **LocalAI integration for free AI responses**
 - 🎨 Beautiful Gradio UI with multiple tabs
 - 📊 Document Intelligence: analysis, smart questions, similarity search
 - 📈 Real-time performance monitoring dashboard
 - 📁 Test documents included (contracts, invoices, reports, receipts)
 
-## 🚀 Quick Start - Demo Mode
+## 🚀 Quick Start Options
 
-**No API key required! Uses mock API for testing:**
+### Option 1: Demo Mode (Mock AI - Basic Testing)
+
+**No API key required! Uses basic mock responses:**
 
 ```bash
 # Clone and run
@@ -41,14 +45,77 @@ cd ai-document-insight-service
 make demo
 ```
 
-**Access points:**
+> **Note:** Mock mode provides basic pre-defined responses, suitable for UI/UX testing but not for evaluating AI capabilities.
+
+### Option 2: LocalAI Mode (Free AI - Full Testing) 🆕
+
+**No API key required! Uses real AI models locally:**
+
+```bash
+# Clone and run
+git clone <repository-url>
+cd ai-document-insight-service
+
+# Start with LocalAI (first run downloads models ~3-4GB)
+make demo-localai
+```
+
+> **Note:** LocalAI provides real AI responses using open-source models. Performance depends on your hardware.
+
+### Option 3: Production Mode (DeepSeek API - Best Quality)
+
+**Requires DeepSeek API key for premium AI responses:**
+
+```bash
+# 1. Get API key from https://platform.deepseek.com/
+# 2. Add to .env file:
+echo "DEEPSEEK_API_KEY=sk-your-actual-key-here" >> .env
+
+# 3. Start production mode
+make up
+```
+
+**Access points for all modes:**
 - 🌐 Gradio UI: http://localhost:7860
 - 📖 API Docs: http://localhost:8000/docs
 - 🔌 API Endpoint: http://localhost:8000
 
-## 📋 Setup Instructions
+## 🎯 For Evaluators/QA Testing
+
+### Testing AI Capabilities
+
+This project supports three AI modes:
+
+| Mode | API Key Required | AI Quality | Use Case |
+|------|------------------|------------|----------|
+| **Mock Mode** | ❌ No | Basic responses | UI/UX testing only |
+| **LocalAI Mode** | ❌ No | Good AI responses | Full functionality testing |
+| **DeepSeek Mode** | ✅ Yes ($) | Best AI responses | Production evaluation |
+
+### Recommended Testing Approach
+
+1. **For Quick Demo** - Use mock mode:
+   ```bash
+   make demo
+   ```
+
+2. **For Full Testing Without Costs** - Use LocalAI:
+   ```bash
+   make demo-localai
+   # Wait ~30 seconds for models to load
+   ```
+
+3. **For Production Evaluation** - Use DeepSeek:
+   - Get API key from https://platform.deepseek.com/
+   - Minimum $1 credit needed
+   - Add key to `.env` file
+   - Run `make up`
+
+## 📋 Detailed Setup Instructions
 
 ### Docker Installation (Recommended)
+
+For standard setup with production or demo mode:
 
 ```bash
 # 1. Clone repository
@@ -68,7 +135,54 @@ docker-compose up -d
 make health
 ```
 
+### Using LocalAI (Recommended for Free Testing)
+
+```bash
+# Method 1: Using make command
+make demo-localai
+
+# Method 2: Using docker-compose directly
+docker-compose -f docker-compose.localai.yml up
+
+# Method 3: Manual setup with existing docker-compose
+# Edit .env file:
+DEEPSEEK_API_URL=http://localhost:8080/v1/chat/completions
+DEEPSEEK_API_KEY=localai
+
+# Start LocalAI separately:
+docker run -d -p 8080:8080 localai/localai:latest-aio-cpu
+
+# Then start your app:
+docker-compose up
+```
+
+### Docker Installation (All Modes - Detailed)
+
+For choosing specific AI modes (Mock/LocalAI/Production):
+
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd ai-document-insight-service
+
+# 2. Copy environment configuration
+cp .env.example .env
+
+# 3. Choose your mode and start:
+
+# For Mock Mode (basic testing):
+make demo
+
+# For LocalAI Mode (full testing, free):
+make demo-localai
+
+# For Production Mode (edit .env first):
+make up
+```
+
 ### Manual Installation
+
+For standard Python setup without Docker:
 
 ```bash
 # 1. Clone repository
@@ -86,6 +200,36 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # 5. Run application
+python run_all.py
+```
+
+### Manual Installation with LocalAI
+
+For manual setup with LocalAI support:
+
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd ai-document-insight-service
+
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment
+cp .env.example .env
+
+# 5. For LocalAI mode, run LocalAI first:
+docker run -d -p 8080:8080 localai/localai:latest-aio-cpu
+
+# 6. Update .env for LocalAI:
+# DEEPSEEK_API_URL=http://localhost:8080/v1/chat/completions
+# DEEPSEEK_API_KEY=localai
+
+# 7. Run application
 python run_all.py
 ```
 
@@ -156,9 +300,23 @@ python check_redis.py
 
 > **Note:** The cache system automatically falls back to file-based caching if Redis is unavailable, ensuring the service always works.
 
-## 🔑 Getting DeepSeek API Key
+## 🔑 AI Provider Configuration
 
-For production use (demo mode works without key):
+### Using Mock API (Default - Basic Testing)
+```env
+# No changes needed, uses built-in mock
+DEEPSEEK_API_KEY=demo-key-for-testing
+```
+
+### Using LocalAI (Free - Full Testing)
+```env
+DEEPSEEK_API_KEY=localai
+DEEPSEEK_API_URL=http://localhost:8080/v1/chat/completions
+```
+
+### Using DeepSeek (Paid - Production)
+
+For production use with best AI quality:
 
 1. Visit https://platform.deepseek.com/
 2. Sign up and verify email
@@ -168,6 +326,7 @@ For production use (demo mode works without key):
 
 ```env
 DEEPSEEK_API_KEY=sk-your-actual-key-here
+# Remove or comment out DEEPSEEK_API_URL
 ```
 
 ## 📡 Example API Requests and Responses
@@ -305,12 +464,12 @@ curl "http://localhost:8000/metrics"
 ┌─────────▼────────────┐             ┌───────────────▼──────────┐
 │   Document Processor  │             │    Question Answering    │
 │ ┌─────────┬─────────┐ │             │ ┌──────────────────────┐ │
-│ │ PyMuPDF │ EasyOCR │ │             │ │   DeepSeek Client    │ │
-│ │  (PDF)  │ (Images)│ │             │ │  (Real or Mock API)  │ │
-│ └─────────┴─────────┘ │             │ └──────────────────────┘ │
-└───────────┬────────────┘             └──────────────────────────┘
-            │
-┌───────────▼────────────┐
+│ │ PyMuPDF │ EasyOCR │ │             │ │   AI Client          │ │
+│ │  (PDF)  │ (Images)│ │             │ │ • Mock API (demo)    │ │
+│ └─────────┴─────────┘ │             │ │ • LocalAI (free)     │ │
+└───────────┬────────────┘             │ │ • DeepSeek (paid)    │ │
+            │                          │ └──────────────────────┘ │
+┌───────────▼────────────┐             └──────────────────────────┘
 │     Cache Layer        │
 │ ┌─────────┬─────────┐ │
 │ │  File   │  Redis  │ │
@@ -319,6 +478,17 @@ curl "http://localhost:8000/metrics"
 │   Content-based Keys   │
 └────────────────────────┘
 ```
+
+### AI Provider Comparison
+
+| Feature | Mock API | LocalAI | DeepSeek API |
+|---------|----------|---------|--------------|
+| **Cost** | Free | Free | ~$0.14/1M tokens |
+| **Setup Time** | Instant | ~5 min | ~10 min |
+| **Response Quality** | Basic/Fixed | Good | Excellent |
+| **Internet Required** | No | No (after setup) | Yes |
+| **Hardware Needs** | Minimal | 4-8GB RAM | Minimal |
+| **Best For** | UI Testing | Full Testing | Production |
 
 ### Tools and Models Chosen
 
@@ -334,8 +504,10 @@ curl "http://localhost:8000/metrics"
 - **Why:** Best accuracy among open-source OCR, no cloud dependencies, supports multiple languages
 - **Trade-off:** Slower than cloud OCR but maintains data privacy
 
-#### 4. DeepSeek API for Q&A
-- **Why:** Cost-effective ($0.14/1M tokens vs $3/1M for competitors), good performance, simple integration
+#### 4. AI Providers for Q&A
+- **Mock API:** Built-in responses for UI testing
+- **LocalAI:** Free, open-source models running locally
+- **DeepSeek API:** Cost-effective ($0.14/1M tokens vs $3/1M for competitors), best quality
 - **Context window:** 8K tokens sufficient for document Q&A
 
 #### 5. Content-Based Caching
@@ -362,6 +534,20 @@ curl "http://localhost:8000/metrics"
 ```bash
 # Run all tests
 make test
+
+# Test with different AI providers:
+
+# Test with mock API
+make demo
+# Upload a document and ask questions
+
+# Test with LocalAI
+make demo-localai
+# Wait for models to load, then test
+
+# Test with DeepSeek (requires API key)
+# Add key to .env first
+make up
 
 # Individual test files:
 
@@ -425,10 +611,17 @@ The `test_docs` folder contains sample documents for testing:
 All settings in `.env` file:
 
 ```env
-# API Configuration
-# Demo mode: use "demo-key-for-testing"
-# Production: use your DeepSeek API key
+# AI Provider Configuration
+# =======================
+# Option 1: Mock API (default - basic testing only)
 DEEPSEEK_API_KEY=demo-key-for-testing
+
+# Option 2: LocalAI (free - full testing)
+# DEEPSEEK_API_KEY=localai
+# DEEPSEEK_API_URL=http://localhost:8080/v1/chat/completions
+
+# Option 3: DeepSeek (paid - production)
+# DEEPSEEK_API_KEY=sk-your-actual-key-here
 
 # Cache Configuration
 # Options: "file" (default) or "redis"
@@ -454,6 +647,8 @@ SIMILARITY_CHUNK_SIZE=500
 
 ## 📊 Performance Metrics
 
+### Document Processing (All Modes)
+
 Measured on standard hardware (4GB RAM, 2 CPU cores):
 
 | Document Type | Extraction Method | Time (First) | Time (Cached) |
@@ -463,16 +658,32 @@ Measured on standard hardware (4GB RAM, 2 CPU cores):
 | PNG Image     | EasyOCR          | 2-3s         | 0.06s         |
 | JPG Receipt   | EasyOCR          | 2-3s         | 0.07s         |
 
-- **Q&A Response:** 2-4 seconds (including context building)
+### AI Response Times
+
+| Operation | Mock API | LocalAI | DeepSeek API |
+|-----------|----------|---------|--------------|
+| API Response | 0.5-1s | 2-5s | 2-4s |
+| First Request* | 1s | 30-60s | 2-4s |
+| Quality | Basic | Good | Excellent |
+
+*LocalAI needs time to load models on first request
+
 - **Concurrent users supported:** 20+
 - **Cache hit rate:** Typically > 70% in production
 
 ## 🐳 Docker Commands
 
 ```bash
-make demo         # Start demo mode (no API key needed)
-make demo-redis   # Demo mode with Redis cache
-make up          # Start services
+# Mock API mode (basic testing)
+make demo
+
+# LocalAI mode (full testing, free)
+make demo-localai
+
+# Production mode (DeepSeek API)
+make up
+
+# Other commands
 make down        # Stop services
 make logs        # View logs
 make health      # Check health
@@ -483,7 +694,22 @@ make restart     # Restart all services
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### LocalAI Issues
+
+**LocalAI slow on first request:**
+- Normal - downloading/loading models
+- Check progress: `docker logs localai-server`
+- Subsequent requests will be fast
+
+**Out of memory with LocalAI:**
+```bash
+# Use smaller model by editing docker-compose.localai.yml
+# Add environment variable:
+environment:
+  - MODELS=llama-2-7b-chat  # Smaller model
+```
+
+### General Issues
 
 **Docker won't start:**
 ```bash
@@ -493,6 +719,15 @@ docker ps
 # Check ports availability
 netstat -an | grep 8000
 netstat -an | grep 7860
+netstat -an | grep 8080  # LocalAI port
+```
+
+**Port conflicts:**
+```bash
+# Check what's using ports
+lsof -i :8000  # API port
+lsof -i :7860  # Gradio port
+lsof -i :8080  # LocalAI port
 ```
 
 **Redis connection issues:**
@@ -517,6 +752,9 @@ CACHE_TYPE=file
 # Check health
 curl http://localhost:8000/
 
+# Check which mode is running
+curl http://localhost:8000/ | grep api_mode
+
 # View detailed logs
 docker-compose logs app
 
@@ -526,10 +764,32 @@ make restart
 
 ## 🎯 Creative Additions
 
+- **Three AI Modes:** Mock (instant), LocalAI (free), DeepSeek (premium)
 - **Mock API Mode:** Full functionality without API keys
+- **LocalAI Integration:** Free AI responses using open-source models
 - **Performance Dashboard:** Real-time metrics visualization
 - **Document Intelligence:** AI-powered analysis and insights
 - **Smart Questions:** AI generates relevant questions about documents
 - **Similarity Search:** Find related content across documents
 - **Benchmark Tools:** Built-in performance testing
 - **Auto-recovery:** Services restart automatically if they crash
+
+## 📝 Summary for Evaluators
+
+1. **No DeepSeek API key?** Use LocalAI mode for full testing:
+   ```bash
+   make demo-localai
+   ```
+
+2. **Just testing UI/UX?** Use mock mode:
+   ```bash
+   make demo
+   ```
+
+3. **Have DeepSeek API key?** Use production mode:
+   ```bash
+   # Add key to .env, then:
+   make up
+   ```
+
+> **All modes provide the same UI and features** - only the AI response quality differs!
