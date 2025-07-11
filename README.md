@@ -2,6 +2,13 @@
 
 A Python-based REST API that ingests PDF and image documents (including scanned contracts and invoices), extracts text, and answers user questions using AI.
 
+
+<img width="1517" height="888" alt="image" src="https://github.com/user-attachments/assets/0cf4e7f7-fdf8-4e9c-b6ad-80f5ff11d0a3" />
+<img width="1564" height="841" alt="image" src="https://github.com/user-attachments/assets/cd4273e5-1548-4090-90dc-51d101b817fa" />
+<img width="2031" height="1280" alt="image" src="https://github.com/user-attachments/assets/f3f3d4c3-6d57-4ce1-b9cd-878d4a162e9b" />
+<img width="1940" height="1202" alt="image" src="https://github.com/user-attachments/assets/13784340-1bfb-455a-b56e-2f5ff91d2f6d" />
+
+
 ## ✨ Features
 
 ### Core Requirements:
