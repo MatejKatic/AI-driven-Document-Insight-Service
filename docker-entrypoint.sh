@@ -4,7 +4,13 @@ set -e
 echo "🚀 Starting AI Document Insight Service..."
 echo "========================================="
 
-if [ "$DEEPSEEK_API_KEY" = "demo-key-for-testing" ] || [ -z "$DEEPSEEK_API_KEY" ]; then
+if [[ "$DEEPSEEK_API_URL" == *"localai"* ]]; then
+    echo "🤖 Using LocalAI"
+    echo "🔗 API URL: $DEEPSEEK_API_URL"
+    echo "📌 Model: gpt-4"
+    echo "⏱️  Note: LocalAI may take 30-120 seconds to respond"
+    
+elif [ "$DEEPSEEK_API_KEY" = "demo-key-for-testing" ] || [ -z "$DEEPSEEK_API_KEY" ]; then
     echo "⚠️  No valid DEEPSEEK_API_KEY detected!"
     echo "📌 Running in DEMO MODE with mock API"
     echo ""
@@ -13,11 +19,21 @@ if [ "$DEEPSEEK_API_KEY" = "demo-key-for-testing" ] || [ -z "$DEEPSEEK_API_KEY" 
     echo "  2. Set DEEPSEEK_API_KEY in docker-compose.yml or .env"
     echo ""
     export DEEPSEEK_API_URL="http://mock-deepseek:8080/v1/chat/completions"
+    echo "🔗 API URL: $DEEPSEEK_API_URL"
+    echo "📌 Model: deepseek-chat (mock responses)"
+    
 else
     echo "✅ DeepSeek API key configured"
     echo "🔗 Using real DeepSeek API"
-    export DEEPSEEK_API_URL="https://api.deepseek.com/v1/chat/completions"
+    if [ -z "$DEEPSEEK_API_URL" ] || [[ "$DEEPSEEK_API_URL" == "https://api.deepseek.com/v1/chat/completions" ]]; then
+        export DEEPSEEK_API_URL="https://api.deepseek.com/v1/chat/completions"
+    fi
+    echo "📌 Model: deepseek-chat"
+    echo "💰 Note: Real API usage will incur costs"
 fi
+
+echo "========================================="
+
 
 mkdir -p /app/uploads /app/cache /app/test_docs /app/logs
 

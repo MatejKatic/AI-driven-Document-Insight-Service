@@ -40,11 +40,13 @@ async def get_api_key(x_api_key: Optional[str] = Header(None)):
 @app.get("/")
 async def root():
     """Root endpoint to verify API is running"""
-    api_mode = "MOCK/DEMO MODE" if config.DEEPSEEK_API_URL and "mock" in config.DEEPSEEK_API_URL else "PRODUCTION MODE"
+    api_mode = config.get_api_mode()
+    model_name = config.get_default_model()
     
     return {
         "message": "AI-Driven Document Insight Service v2.0",
         "api_mode": api_mode,
+        "model": model_name,
         "endpoints": {
             "upload": "/upload",
             "ask": "/ask",
@@ -54,7 +56,7 @@ async def root():
         },
         "performance_enabled": True,
         "cache_type": config.CACHE_TYPE,
-        "note": "Using mock DeepSeek API - perfect for testing!" if "mock" in config.DEEPSEEK_API_URL else None
+        "note": f"Using {model_name} model with {api_mode} API"
     }
 
 @app.post("/upload", response_model=UploadMetrics)

@@ -14,13 +14,50 @@ class Config:
     @classmethod
     def is_using_mock_api(cls):
         """Check if using mock DeepSeek API"""
-        return "mock-deepseek" in cls.DEEPSEEK_API_URL or cls.DEEPSEEK_API_KEY == "demo-key-for-testing"
+        return ("mock-deepseek" in cls.DEEPSEEK_API_URL or 
+                cls.DEEPSEEK_API_KEY == "demo-key-for-testing" or
+                not cls.DEEPSEEK_API_KEY)
+    
+    @classmethod
+    def is_using_localai(cls):
+        """Check if using LocalAI"""
+        return ("localai" in cls.DEEPSEEK_API_URL or 
+                cls.DEEPSEEK_API_KEY in ["localai", "test"])
     
     @classmethod
     def get_api_mode(cls):
         """Get API mode for display"""
-        return "MOCK/DEMO" if cls.is_using_mock_api() else "PRODUCTION"
+        if cls.is_using_localai():
+            return "LOCALAI"
+        elif cls.is_using_mock_api():
+            return "MOCK/DEMO"
+        else:
+            return "PRODUCTION"
     
+    @classmethod
+    def get_default_model(cls):
+        """Get the appropriate model based on API type"""
+        if cls.is_using_localai():
+            return "gpt-4"  # LocalAI uses gpt-4
+        elif cls.is_using_mock_api():
+            return "deepseek-chat"  # Mock API expects deepseek-chat
+        else:
+            return "deepseek-chat"  # Real DeepSeek API
+    
+    DEFAULT_MODEL = property(lambda self: Config.get_default_model())
+    
+    # Auto-configure API URL for mock mode if needed
+    @classmethod
+    def get_api_url(cls):
+        """Get the appropriate API URL"""
+        if cls.DEEPSEEK_API_KEY == "demo-key-for-testing" and "mock-deepseek" not in cls.DEEPSEEK_API_URL:
+            # If using demo key but URL isn't set to mock, use mock
+            return "http://mock-deepseek:8080/v1/chat/completions"
+        return cls.DEEPSEEK_API_URL
+    
+
+    
+
     # File upload settings
     MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
     MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "5"))

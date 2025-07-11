@@ -1,35 +1,29 @@
 version: '3.8'
 
 services:
-  # LocalAI service
   localai:
     image: localai/localai:latest-aio-cpu
     container_name: localai-server
     ports:
       - "8080:8080"
-    volumes:
-      - ./models:/models
     networks:
       - doc-insight-network
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Main application service
   app:
     build: .
     container_name: document-insight-app
     ports:
-      - "8000:8000"  # FastAPI
-      - "7860:7860"  # Gradio
+      - "8000:8000"
+      - "7860:7860"
     environment:
-      - DEEPSEEK_API_KEY=localai
+      - DEEPSEEK_API_KEY=test
       - DEEPSEEK_API_URL=http://localai:8080/v1/chat/completions
-      - CACHE_TYPE=${CACHE_TYPE:-file}
-      - ENABLE_PERFORMANCE_MONITORING=true
+      - CACHE_TYPE=file
       - PYTHONUNBUFFERED=1
     volumes:
       - ./uploads:/app/uploads
@@ -40,15 +34,8 @@ services:
       - localai
     networks:
       - doc-insight-network
-    restart: unless-stopped
-    command: ["/app/run_services.sh"]
+    command: bash -c "cd /app && python run_all.py"
 
 networks:
   doc-insight-network:
     driver: bridge
-    name: doc-insight-net
-
-volumes:
-  uploads:
-  cache:
-  models:

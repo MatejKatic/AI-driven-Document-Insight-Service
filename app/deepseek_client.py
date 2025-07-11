@@ -11,7 +11,7 @@ class DeepSeekClient:
     def __init__(self):
         self.api_key = config.DEEPSEEK_API_KEY
         self.api_url = config.DEEPSEEK_API_URL
-        self.model = config.DEFAULT_MODEL
+        self.model = config.get_default_model()
         self.api_stats = {
             "total_requests": 0,
             "successful_requests": 0,
@@ -89,7 +89,7 @@ Please answer the question based only on the information provided in the context
                     self.api_url,
                     headers=headers,
                     json=payload,
-                    timeout=30.0
+                    timeout=120.0
                 )
                 
             api_latency = (time.time() - api_start) * 1000
