@@ -1,0 +1,106 @@
+# Mock DeepSeek API for testing
+FROM python:3.9-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir fastapi uvicorn
+
+RUN cat > mock_deepseek.py << 'EOF'
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Any
+import random
+import time
+
+app = FastAPI(title="Mock DeepSeek API")
+
+class Message(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    model: str
+    messages: List[Message]
+    max_tokens: int = 2000
+    temperature: float = 0.7
+
+class ChatResponse(BaseModel):
+    choices: List[Dict[str, Any]]
+    usage: Dict[str, int]
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "mock-deepseek"}
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: ChatRequest):
+    """Mock DeepSeek API endpoint for testing"""
+    
+    time.sleep(random.uniform(0.5, 1.5))
+    
+    user_message = ""
+    for msg in request.messages:
+        if msg.role == "user":
+            user_message = msg.content
+            break
+    
+    mock_responses = {
+        "main topic": "Based on the provided documents, the main topic appears to be a comprehensive analysis of business operations, technical specifications, and contractual agreements. The documents cover financial performance, system architecture, and service terms.",
+        "key points": "The key points from the documents include: 1) Strong financial performance with 25% revenue growth, 2) Advanced technical architecture using microservices and AI, 3) Clear contractual terms with defined service levels and payment schedules.",
+        "summary": "The documents present a multi-faceted view of a technology company's operations, including annual reports showing strong growth, technical specifications for an AI-powered document processing system, and service agreements outlining professional services arrangements.",
+        "dates": "Several important dates are mentioned: January 1, 2024 (contract start date), January 15, 2024 (invoice date), January 18, 2024 (meeting date), and projected revenue targets for 2025.",
+        "financial": "Financial highlights include: Revenue of $10.5 million (up 25% YoY), Net profit of $2.1 million, Operating margin of 20%, Monthly service fee of $5,000, and projected 2025 revenue of $13 million.",
+        "technical": "The technical architecture includes: React frontend, FastAPI microservices backend, Transformer-based ML models, PostgreSQL with vector storage, Redis caching, and performance requirements of <5 seconds per document with >95% accuracy.",
+        "default": "Based on the uploaded documents, I can see this contains important business information including financial reports, technical specifications, and contractual agreements. The documents show a well-structured organization with clear operational procedures and growth strategies."
+    }
+    
+    response_text = mock_responses["default"]
+    user_lower = user_message.lower()
+    
+    for key, response in mock_responses.items():
+        if key in user_lower:
+            response_text = response
+            break
+    
+    prompt_tokens = len(user_message.split()) * 2
+    completion_tokens = len(response_text.split()) * 2
+    
+    return {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": response_text
+                },
+                "finish_reason": "stop",
+                "index": 0
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens
+        },
+        "model": request.model,
+        "created": int(time.time())
+    }
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Mock DeepSeek API for testing",
+        "note": "This is a mock service for testing the Document Insight Service without a real API key",
+        "endpoints": {
+            "/v1/chat/completions": "POST - Mock chat completions",
+            "/health": "GET - Health check"
+        }
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+EOF
+
+EXPOSE 8080
+
+CMD ["python", "mock_deepseek.py"]

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build: .
+    container_name: document-insight-app
+    ports:
+      - "8000:8000"  # FastAPI
+      - "7860:7860"  # Gradio
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-demo-key-for-testing}
+      - DEEPSEEK_API_URL=${DEEPSEEK_API_URL:-}
+      
+      - CACHE_TYPE=${CACHE_TYPE:-file}
+      
+      - ENABLE_PERFORMANCE_MONITORING=true
+      - PYTHONUNBUFFERED=1
+      
+      - SESSION_EXPIRE_HOURS=${SESSION_EXPIRE_HOURS:-24}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+      - MAX_FILES_PER_UPLOAD=${MAX_FILES_PER_UPLOAD:-5}
+      
+    volumes:
+      - ./uploads:/app/uploads
+      - ./cache:/app/cache
+      - ./test_docs:/app/test_docs
+      - ./logs:/app/logs
+    depends_on:
+      - mock-deepseek
+    networks:
+      - doc-insight-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: ["/app/run_services.sh"]
+
+  mock-deepseek:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    container_name: mock-deepseek-api
+    ports:
+      - "8080:8080"
+    networks:
+      - doc-insight-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: document-insight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - doc-insight-network
+    profiles:
+      - with-redis
+    restart: unless-stopped
+
+networks:
+  doc-insight-network:
+    driver: bridge
+    name: doc-insight-net
+
+volumes:
+  redis-data:
+  uploads:
+  cache:

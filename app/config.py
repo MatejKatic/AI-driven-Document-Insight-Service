@@ -8,8 +8,18 @@ class Config:
     """Application configuration with performance settings"""
     
     # DeepSeek API
-    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-    DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "demo-key-for-testing")
+    DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
+    
+    @classmethod
+    def is_using_mock_api(cls):
+        """Check if using mock DeepSeek API"""
+        return "mock-deepseek" in cls.DEEPSEEK_API_URL or cls.DEEPSEEK_API_KEY == "demo-key-for-testing"
+    
+    @classmethod
+    def get_api_mode(cls):
+        """Get API mode for display"""
+        return "MOCK/DEMO" if cls.is_using_mock_api() else "PRODUCTION"
     
     # File upload settings
     MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))

@@ -204,19 +204,20 @@ class DocumentIntelligence:
             cat = categories[i % len(categories)]
             example_questions.append(f'{{"question": "Example question {i+1}...", "category": "{cat}"}}')
         
+        example_questions_str = ',\n            '.join(example_questions)
         prompt = f"""Based on this document, generate exactly {num_questions} insightful questions that someone might ask.
-        Include different types of questions: factual, analytical, comparative, and clarification.
-        
-        Return as a JSON array with exactly {num_questions} objects containing 'question' and 'category' fields.
-        Categories should be one of: 'factual', 'analytical', 'comparative', 'clarification'
-        
-        Document excerpt: {text[:2000]}...
-        
-        Response format (generate exactly {num_questions} questions):
-        [
-            {',\n            '.join(example_questions)},
-            ... (continue until {num_questions} questions)
-        ]"""
+Include different types of questions: factual, analytical, comparative, and clarification.
+
+Return as a JSON array with exactly {num_questions} objects containing 'question' and 'category' fields.
+Categories should be one of: 'factual', 'analytical', 'comparative', 'clarification'
+
+Document excerpt: {text[:2000]}...
+
+Response format (generate exactly {num_questions} questions):
+[
+    {example_questions_str},
+    ... (continue until {num_questions} questions)
+]"""
         
         result = await self.deepseek_client.ask_question("", prompt)
         

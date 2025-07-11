@@ -40,8 +40,11 @@ async def get_api_key(x_api_key: Optional[str] = Header(None)):
 @app.get("/")
 async def root():
     """Root endpoint to verify API is running"""
+    api_mode = "MOCK/DEMO MODE" if config.DEEPSEEK_API_URL and "mock" in config.DEEPSEEK_API_URL else "PRODUCTION MODE"
+    
     return {
         "message": "AI-Driven Document Insight Service v2.0",
+        "api_mode": api_mode,
         "endpoints": {
             "upload": "/upload",
             "ask": "/ask",
@@ -49,7 +52,9 @@ async def root():
             "cache_stats": "/cache/stats",
             "docs": "/docs"
         },
-        "performance_enabled": True
+        "performance_enabled": True,
+        "cache_type": config.CACHE_TYPE,
+        "note": "Using mock DeepSeek API - perfect for testing!" if "mock" in config.DEEPSEEK_API_URL else None
     }
 
 @app.post("/upload", response_model=UploadMetrics)

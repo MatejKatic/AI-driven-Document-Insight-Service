@@ -1,34 +1,34 @@
 # Core Web Framework
-fastapi==0.115.14
-uvicorn==0.35.0
-python-multipart==0.0.20
+fastapi
+uvicorn
+python-multipart
 
 # PDF Processing
-PyMuPDF==1.26.3
-pillow==11.3.0
+PyMuPDF
+pillow
 
 # OCR Capabilities
-easyocr==1.7.2
-opencv-python-headless==4.11.0.86
+easyocr
 
-# API & Configuration
-httpx==0.28.1
-python-dotenv==1.1.1
+# API Calls
+httpx
+python-dotenv
 
-# Data Models & Validation
-pydantic==2.11.7
+# Data Processing
+pydantic
 
-# ML & Data Processing
-numpy==2.3.1
-scikit-learn==1.7.0
-pandas==2.3.1
+# Machine Learning & Data
+numpy
+opencv-python-headless
+scikit-learn
+pandas
 
 # UI & Visualization
-gradio==5.35.0
-plotly==6.2.0
+gradio
+plotly
 
-# Performance Monitoring
-psutil==7.0.0
+# Performance & System
+psutil
 
-# Optional: Redis Cache
-redis==6.2.0
+# Optional: Caching
+redis
